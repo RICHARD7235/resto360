@@ -31,13 +31,15 @@ export function AllergenBadge({ allergen, compact = false }: { allergen: string;
     return (
       <TooltipProvider>
         <Tooltip>
-          <TooltipTrigger asChild>
-            <span
-              className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-sm border ${info.color} cursor-default`}
-              aria-label={info.label}
-            >
-              {info.emoji}
-            </span>
+          <TooltipTrigger
+            render={
+              <span
+                className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-sm border ${info.color} cursor-default`}
+                aria-label={info.label}
+              />
+            }
+          >
+            {info.emoji}
           </TooltipTrigger>
           <TooltipContent>{info.label}</TooltipContent>
         </Tooltip>
