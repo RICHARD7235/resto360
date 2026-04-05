@@ -86,7 +86,7 @@ export async function getOrders(
 
   let query = supabase
     .from("orders")
-    .select("*, order_items(count)")
+    .select("*")
     .eq("restaurant_id", restaurantId)
     .order("created_at", { ascending: false });
 
@@ -99,7 +99,6 @@ export async function getOrders(
   }
 
   if (filters.dateTo) {
-    // Add a day to include the full end date
     query = query.lt("created_at", `${filters.dateTo}T23:59:59.999Z`);
   }
 
@@ -111,36 +110,51 @@ export async function getOrders(
     );
   }
 
-  return (data ?? []).map((row) => {
-    const { order_items, ...order } = row as OrderRow & {
-      order_items: [{ count: number }];
-    };
-    return {
-      ...order,
-      items_count: order_items?.[0]?.count ?? 0,
-    };
-  });
+  // Fetch item counts separately (no FK relation in generated types)
+  const orderIds = (data ?? []).map((o) => o.id);
+  let itemCounts: Record<string, number> = {};
+
+  if (orderIds.length > 0) {
+    const { data: items } = await supabase
+      .from("order_items")
+      .select("order_id")
+      .in("order_id", orderIds);
+
+    for (const item of items ?? []) {
+      itemCounts[item.order_id] = (itemCounts[item.order_id] ?? 0) + 1;
+    }
+  }
+
+  return (data ?? []).map((order) => ({
+    ...order,
+    items_count: itemCounts[order.id] ?? 0,
+  }));
 }
 
 export async function getOrder(id: string): Promise<OrderWithItems | null> {
   const restaurantId = await getUserRestaurantId();
   const supabase = await createClient();
 
-  const { data, error } = await supabase
+  const { data: order, error } = await supabase
     .from("orders")
-    .select("*, order_items(*)")
+    .select("*")
     .eq("id", id)
     .eq("restaurant_id", restaurantId)
     .single();
 
   if (error) {
-    if (error.code === "PGRST116") return null; // Not found
+    if (error.code === "PGRST116") return null;
     throw new Error(
       `Erreur lors du chargement de la commande : ${error.message}`
     );
   }
 
-  return data as OrderWithItems;
+  const { data: items } = await supabase
+    .from("order_items")
+    .select("*")
+    .eq("order_id", id);
+
+  return { ...order, order_items: items ?? [] };
 }
 
 export async function getActiveOrders(): Promise<OrderWithItems[]> {
@@ -149,9 +163,9 @@ export async function getActiveOrders(): Promise<OrderWithItems[]> {
 
   const today = new Date().toISOString().split("T")[0];
 
-  const { data, error } = await supabase
+  const { data: orders, error } = await supabase
     .from("orders")
-    .select("*, order_items(*)")
+    .select("*")
     .eq("restaurant_id", restaurantId)
     .gte("created_at", today)
     .in("status", ["pending", "in_progress", "ready"])
@@ -163,7 +177,24 @@ export async function getActiveOrders(): Promise<OrderWithItems[]> {
     );
   }
 
-  return (data ?? []) as OrderWithItems[];
+  if (!orders || orders.length === 0) return [];
+
+  const orderIds = orders.map((o) => o.id);
+  const { data: items } = await supabase
+    .from("order_items")
+    .select("*")
+    .in("order_id", orderIds);
+
+  const itemsByOrder: Record<string, OrderItemRow[]> = {};
+  for (const item of items ?? []) {
+    if (!itemsByOrder[item.order_id]) itemsByOrder[item.order_id] = [];
+    itemsByOrder[item.order_id].push(item);
+  }
+
+  return orders.map((order) => ({
+    ...order,
+    order_items: itemsByOrder[order.id] ?? [],
+  }));
 }
 
 export async function getMenuCategories(): Promise<MenuCategoryRow[]> {
@@ -356,7 +387,7 @@ export async function updateOrderItemStatus(
   // Verify the item belongs to an order from this restaurant
   const { data: item, error: fetchError } = await supabase
     .from("order_items")
-    .select("*, orders!inner(restaurant_id)")
+    .select("*")
     .eq("id", id)
     .single();
 
@@ -366,11 +397,14 @@ export async function updateOrderItemStatus(
     );
   }
 
-  const orderData = item as unknown as {
-    orders: { restaurant_id: string };
-  };
+  // Check that the parent order belongs to this restaurant
+  const { data: parentOrder } = await supabase
+    .from("orders")
+    .select("restaurant_id")
+    .eq("id", item.order_id)
+    .single();
 
-  if (orderData.orders.restaurant_id !== restaurantId) {
+  if (parentOrder?.restaurant_id !== restaurantId) {
     throw new Error("Article non trouvé.");
   }
 
