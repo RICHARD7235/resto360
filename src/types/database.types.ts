@@ -450,6 +450,87 @@ export interface Database {
         };
         Relationships: [];
       };
+      recipes: {
+        Row: {
+          id: string;
+          restaurant_id: string;
+          product_id: string | null;
+          name: string;
+          description: string | null;
+          portions: number;
+          prep_time_min: number | null;
+          cook_time_min: number | null;
+          instructions: string | null;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          restaurant_id: string;
+          product_id?: string | null;
+          name: string;
+          description?: string | null;
+          portions?: number;
+          prep_time_min?: number | null;
+          cook_time_min?: number | null;
+          instructions?: string | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          restaurant_id?: string;
+          product_id?: string | null;
+          name?: string;
+          description?: string | null;
+          portions?: number;
+          prep_time_min?: number | null;
+          cook_time_min?: number | null;
+          instructions?: string | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      recipe_ingredients: {
+        Row: {
+          id: string;
+          recipe_id: string;
+          name: string;
+          quantity: number;
+          unit: string;
+          unit_cost: number;
+          supplier_id: string | null;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          recipe_id: string;
+          name: string;
+          quantity?: number;
+          unit?: string;
+          unit_cost?: number;
+          supplier_id?: string | null;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          recipe_id?: string;
+          name?: string;
+          quantity?: number;
+          unit?: string;
+          unit_cost?: number;
+          supplier_id?: string | null;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       documents: {
         Row: {
           id: string;
