@@ -257,7 +257,7 @@ export function ReservationForm({
               <Label htmlFor="type">Type</Label>
               <Select
                 value={formData.type}
-                onValueChange={(v) => updateField("type", v)}
+                onValueChange={(v) => updateField("type", v ?? "restaurant")}
               >
                 <SelectTrigger className="w-full min-h-11" id="type">
                   <SelectValue />
@@ -288,7 +288,7 @@ export function ReservationForm({
                 <Label htmlFor="status">Statut</Label>
                 <Select
                   value={formData.status}
-                  onValueChange={(v) => updateField("status", v)}
+                  onValueChange={(v) => updateField("status", v ?? "pending")}
                 >
                   <SelectTrigger className="w-full min-h-11" id="status">
                     <SelectValue />

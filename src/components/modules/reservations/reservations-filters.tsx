@@ -35,16 +35,16 @@ export function ReservationsFilters() {
     setFilters({ search: e.target.value });
   }
 
-  function handleStatusChange(value: string) {
-    if (value === "all") {
+  function handleStatusChange(value: string | null) {
+    if (!value || value === "all") {
       setFilters({ status: [] });
     } else {
       setFilters({ status: [value] });
     }
   }
 
-  function handleTypeChange(value: string) {
-    if (value === "all") {
+  function handleTypeChange(value: string | null) {
+    if (!value || value === "all") {
       setFilters({ type: [] });
     } else {
       setFilters({ type: [value] });
