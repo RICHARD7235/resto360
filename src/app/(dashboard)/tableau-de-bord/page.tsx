@@ -1,13 +1,38 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { KpiCards } from "@/components/modules/dashboard/kpi-cards";
 import { RevenueChart } from "@/components/modules/dashboard/revenue-chart";
 import { RecentReservations } from "@/components/modules/dashboard/recent-reservations";
 import { StockAlerts } from "@/components/modules/dashboard/stock-alerts";
 
-const RESTAURANT_ID = "a0000000-0000-0000-0000-000000000001";
-
 export default async function DashboardPage() {
   const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/connexion");
+
+  // Récupérer le restaurant_id du profil utilisateur
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("restaurant_id, full_name")
+    .eq("id", user.id)
+    .single();
+
+  const restaurantId = profile?.restaurant_id;
+
+  if (!restaurantId) {
+    return (
+      <div className="flex items-center justify-center h-[60vh]">
+        <p className="text-muted-foreground">
+          Aucun restaurant associé à votre compte. Contactez l&apos;administrateur.
+        </p>
+      </div>
+    );
+  }
+
   const today = new Date().toISOString().slice(0, 10);
   const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
   const weekAgo = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
@@ -22,25 +47,25 @@ export default async function DashboardPage() {
     supabase
       .from("daily_stats")
       .select("*")
-      .eq("restaurant_id", RESTAURANT_ID)
+      .eq("restaurant_id", restaurantId)
       .eq("date", today)
       .single(),
     supabase
       .from("daily_stats")
       .select("*")
-      .eq("restaurant_id", RESTAURANT_ID)
+      .eq("restaurant_id", restaurantId)
       .eq("date", yesterday)
       .single(),
     supabase
       .from("daily_stats")
       .select("*")
-      .eq("restaurant_id", RESTAURANT_ID)
+      .eq("restaurant_id", restaurantId)
       .gte("date", weekAgo)
       .order("date", { ascending: true }),
     supabase
       .from("reservations")
       .select("*")
-      .eq("restaurant_id", RESTAURANT_ID)
+      .eq("restaurant_id", restaurantId)
       .gte("date", today)
       .in("status", ["pending", "confirmed"])
       .order("date", { ascending: true })
@@ -48,20 +73,19 @@ export default async function DashboardPage() {
     supabase
       .from("stock_items")
       .select("*")
-      .eq("restaurant_id", RESTAURANT_ID),
+      .eq("restaurant_id", restaurantId),
   ]);
 
   const upcomingReservations = reservations?.length ?? 0;
-  const alertItems = stockItems?.filter(
-    (i) => i.current_quantity <= i.min_threshold
-  ) ?? [];
+  const alertItems =
+    stockItems?.filter((i) => i.current_quantity <= i.min_threshold) ?? [];
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Tableau de bord</h1>
         <p className="text-muted-foreground">
-          Vue d&apos;ensemble de La Cabane Qui Fume
+          Bienvenue, {profile?.full_name ?? "Restaurateur"}
         </p>
       </div>
 

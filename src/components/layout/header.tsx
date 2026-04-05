@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Search } from "lucide-react";
+import { Bell, LogOut, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
@@ -13,6 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { logout } from "@/app/(auth)/connexion/actions";
 
 export function Header() {
   return (
@@ -52,7 +53,11 @@ export function Header() {
           <DropdownMenuItem>Mon profil</DropdownMenuItem>
           <DropdownMenuItem>Paramètres</DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem className="text-destructive">
+          <DropdownMenuItem
+            className="text-destructive"
+            onClick={() => logout()}
+          >
+            <LogOut className="h-4 w-4 mr-2" />
             Déconnexion
           </DropdownMenuItem>
         </DropdownMenuContent>
