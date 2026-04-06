@@ -16,7 +16,7 @@ import {
   MenuSelectionDialog,
   type MenuSelection,
 } from "@/components/modules/commandes/menu-selection-dialog";
-import { getMenuCategories, getProducts, createOrder, getMenusForOrder } from "../actions";
+import { getMenuCategories, getProducts, createOrder, addItemsToOrder, getMenusForOrder } from "../actions";
 import type { MenuWithItems } from "../actions";
 import type { Tables } from "@/types/database.types";
 
@@ -41,6 +41,8 @@ function NouvelleCommandeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tableNumber = searchParams.get("table") ?? "T1";
+  const existingOrderId = searchParams.get("order");
+  const isAddMode = !!existingOrderId;
 
   const {
     cart,
@@ -160,28 +162,33 @@ function NouvelleCommandeContent() {
     if (cart.length === 0) return;
     setSubmitting(true);
     try {
-      await createOrder({
-        table_number: tableNumber,
-        items: cart.map((item) => ({
-          product_id: item.product_id,
-          product_name: item.product_name,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          notes: item.notes || undefined,
-          menu_id: item.menu_id,
-          menu_name: item.menu_name,
-          is_menu_header: item.is_menu_header,
-          real_menu_id: item.real_menu_id,
-        })),
-      });
+      const mappedItems = cart.map((item) => ({
+        product_id: item.product_id,
+        product_name: item.product_name,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        notes: item.notes || undefined,
+        menu_id: item.menu_id,
+        menu_name: item.menu_name,
+        is_menu_header: item.is_menu_header,
+        real_menu_id: item.real_menu_id,
+      }));
+
+      if (isAddMode && existingOrderId) {
+        await addItemsToOrder(existingOrderId, mappedItems);
+      } else {
+        await createOrder({
+          table_number: tableNumber,
+          items: mappedItems,
+        });
+      }
       clearCart();
       router.push("/commandes");
     } catch (error) {
       console.error("handleSubmit error:", error);
       const raw = error instanceof Error ? error.message : "";
-      // Next.js production sanitizes server action errors — show a clear message
       const message = raw.includes("Server Components") || !raw
-        ? "Erreur lors de la création de la commande. Veuillez réessayer."
+        ? "Erreur lors de la commande. Veuillez réessayer."
         : raw;
       toast.error(message);
     } finally {
@@ -211,7 +218,7 @@ function NouvelleCommandeContent() {
         </Button>
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
-            Nouvelle commande — Table {tableNumber}
+            {isAddMode ? `Ajouter à la commande — Table ${tableNumber}` : `Nouvelle commande — Table ${tableNumber}`}
           </h1>
           <p className="text-muted-foreground">
             Sélectionnez les produits à ajouter
@@ -298,6 +305,7 @@ function NouvelleCommandeContent() {
             onSubmit={handleSubmit}
             onClear={clearCart}
             loading={submitting}
+            submitLabel={isAddMode ? "Ajouter à la commande" : undefined}
           />
         </div>
       </div>

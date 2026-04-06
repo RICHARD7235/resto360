@@ -310,25 +310,37 @@ export default function CommandesPage() {
               : "Sélectionnez une table"}
           </h2>
           {selectedOrder ? (
-            <OrderSummary
-              order={{
-                id: selectedOrder.id,
-                table_number: selectedOrder.table_number,
-                status: selectedOrder.status ?? "sent",
-                total: selectedOrder.total ?? 0,
-                notes: selectedOrder.notes,
-                created_at: selectedOrder.created_at ?? new Date().toISOString(),
-                items: selectedOrder.order_items.map((item) => ({
-                  id: item.id,
-                  product_name: item.product_name,
-                  quantity: item.quantity,
-                  unit_price: item.unit_price,
-                  status: item.status ?? "pending",
-                })),
-              }}
-              onViewDetail={() => {}}
-              onStatusChange={handleStatusChange}
-            />
+            <div className="space-y-3">
+              <OrderSummary
+                order={{
+                  id: selectedOrder.id,
+                  table_number: selectedOrder.table_number,
+                  status: selectedOrder.status ?? "sent",
+                  total: selectedOrder.total ?? 0,
+                  notes: selectedOrder.notes,
+                  created_at: selectedOrder.created_at ?? new Date().toISOString(),
+                  items: selectedOrder.order_items.map((item) => ({
+                    id: item.id,
+                    product_name: item.product_name,
+                    quantity: item.quantity,
+                    unit_price: item.unit_price,
+                    status: item.status ?? "pending",
+                  })),
+                }}
+                onViewDetail={() => {}}
+                onStatusChange={handleStatusChange}
+              />
+              <Button
+                variant="outline"
+                className="min-h-11 w-full gap-2"
+                render={
+                  <Link href={`/commandes/nouvelle?table=${selectedTable}&order=${selectedOrder.id}`} />
+                }
+              >
+                <Plus className="h-4 w-4" />
+                Ajouter des articles
+              </Button>
+            </div>
           ) : selectedTable ? (
             <div className="rounded-xl border bg-card p-6 text-center space-y-4">
               {/* Show reservation info if table is reserved */}

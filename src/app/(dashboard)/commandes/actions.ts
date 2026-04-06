@@ -748,12 +748,14 @@ export async function addItemsToOrder(
   // Insert new items
   const itemsToInsert = items.map((item) => ({
     order_id: orderId,
-    product_id: item.product_id,
+    product_id: item.is_menu_header ? null : item.product_id,
     product_name: item.product_name,
     quantity: item.quantity,
     unit_price: item.unit_price,
     notes: item.notes ?? null,
     status: "pending" as const,
+    menu_id: item.real_menu_id ?? null,
+    menu_name: item.menu_name ?? null,
   }));
 
   const { error: insertError } = await supabase

@@ -18,6 +18,7 @@ interface OrderPanelProps {
   onSubmit: () => Promise<void>;
   onClear: () => void;
   loading?: boolean;
+  submitLabel?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -97,6 +98,7 @@ export function OrderPanel({
   onSubmit,
   onClear,
   loading = false,
+  submitLabel,
 }: OrderPanelProps) {
   const total = cart.reduce(
     (sum, item) => sum + item.unit_price * item.quantity,
@@ -174,7 +176,7 @@ export function OrderPanel({
             onClick={onSubmit}
             disabled={isEmpty || loading}
           >
-            {loading ? "Envoi en cours…" : "Envoyer en cuisine"}
+            {loading ? "Envoi en cours…" : (submitLabel ?? "Envoyer en cuisine")}
           </Button>
         </div>
       </div>
