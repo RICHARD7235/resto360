@@ -21,28 +21,40 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { AllergenList } from "./allergen-badge";
 import type { Tables } from "@/types/database.types";
 
 type Product = Tables<"products">;
 type MenuCategory = Tables<"menu_categories">;
+type Station = Tables<"preparation_stations">;
 
 interface MenuEditorProps {
   categories: MenuCategory[];
   products: Product[];
+  stations?: Station[];
   onToggleAvailability: (id: string, available: boolean) => void;
   onEditProduct: (id: string) => void;
   onDeleteProduct: (id: string) => void;
   onNewProduct: (categoryId: string) => void;
+  onUpdateCategoryStation?: (categoryId: string, stationId: string | null) => void;
 }
 
 export function MenuEditor({
   categories,
   products,
+  stations,
   onToggleAvailability,
   onEditProduct,
   onDeleteProduct,
   onNewProduct,
+  onUpdateCategoryStation,
 }: MenuEditorProps) {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
     new Set(categories.map((c) => c.id))
@@ -109,18 +121,46 @@ export function MenuEditor({
                   {availableCount}/{catProducts.length} dispo
                 </Badge>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onNewProduct(category.id);
-                }}
-                className="gap-1"
-              >
-                <Plus className="h-4 w-4" />
-                Ajouter
-              </Button>
+              <div className="flex items-center gap-2">
+                {stations && stations.length > 0 && onUpdateCategoryStation && (
+                  <Select
+                    value={category.default_station_id ?? "none"}
+                    onValueChange={(v) => {
+                      onUpdateCategoryStation(
+                        category.id,
+                        !v || v === "none" ? null : v
+                      );
+                    }}
+                  >
+                    <SelectTrigger
+                      className="h-8 w-44 text-xs"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <SelectValue placeholder="Poste de preparation" />
+                    </SelectTrigger>
+                    <SelectContent onClick={(e) => e.stopPropagation()}>
+                      <SelectItem value="none">Aucun poste</SelectItem>
+                      {stations.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onNewProduct(category.id);
+                  }}
+                  className="gap-1"
+                >
+                  <Plus className="h-4 w-4" />
+                  Ajouter
+                </Button>
+              </div>
             </button>
 
             {isExpanded && (

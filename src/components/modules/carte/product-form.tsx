@@ -33,6 +33,7 @@ export interface ProductFormData {
   category_id: string;
   allergens: string[];
   is_available: boolean;
+  station_id: string | null;
 }
 
 interface ProductFormProps {
@@ -43,6 +44,7 @@ interface ProductFormProps {
   defaultCategoryId?: string;
   onSubmit: (data: ProductFormData) => void;
   loading?: boolean;
+  stations?: Tables<"preparation_stations">[];
 }
 
 export function ProductForm({
@@ -53,6 +55,7 @@ export function ProductForm({
   defaultCategoryId,
   onSubmit,
   loading = false,
+  stations,
 }: ProductFormProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -61,6 +64,7 @@ export function ProductForm({
   const [categoryId, setCategoryId] = useState("");
   const [allergens, setAllergens] = useState<string[]>([]);
   const [isAvailable, setIsAvailable] = useState(true);
+  const [stationId, setStationId] = useState<string>("");
 
   useEffect(() => {
     if (product) {
@@ -71,6 +75,7 @@ export function ProductForm({
       setCategoryId(product.category_id ?? "");
       setAllergens(product.allergens ?? []);
       setIsAvailable(product.is_available ?? true);
+      setStationId(product.station_id ?? "");
     } else {
       setName("");
       setDescription("");
@@ -79,6 +84,7 @@ export function ProductForm({
       setCategoryId(defaultCategoryId ?? categories[0]?.id ?? "");
       setAllergens([]);
       setIsAvailable(true);
+      setStationId("");
     }
   }, [product, open, defaultCategoryId, categories]);
 
@@ -100,6 +106,7 @@ export function ProductForm({
       category_id: categoryId,
       allergens,
       is_available: isAvailable,
+      station_id: stationId || null,
     });
   }
 
@@ -155,6 +162,28 @@ export function ProductForm({
               </SelectContent>
             </Select>
           </div>
+
+          {stations && stations.length > 0 && (
+            <div className="space-y-2">
+              <Label htmlFor="product-station">Poste de preparation</Label>
+              <Select value={stationId || "none"} onValueChange={(v) => setStationId(!v || v === "none" ? "" : v)}>
+                <SelectTrigger id="product-station">
+                  <SelectValue placeholder="Poste de la categorie" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Poste de la categorie</SelectItem>
+                  {stations.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Laissez vide pour utiliser le poste de la categorie
+              </p>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">

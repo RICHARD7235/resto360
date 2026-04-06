@@ -4,33 +4,17 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { KitchenTicket } from "./kitchen-ticket";
+import { KitchenTicket, type TicketData } from "./kitchen-ticket";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-interface OrderItem {
-  id: string;
-  product_name: string;
-  quantity: number;
-  notes: string | null;
-  status: string;
-}
-
-interface Order {
-  id: string;
-  table_number: string | null;
-  status: string;
-  created_at: string;
-  notes: string | null;
-  items: OrderItem[];
-}
-
 interface KitchenBoardProps {
-  orders: Order[];
+  tickets: TicketData[];
   onItemStatusChange: (itemId: string, status: string) => void;
-  onOrderStatusChange: (orderId: string, status: string) => void;
+  onTicketStatusChange: (ticketId: string, status: string) => void;
+  showStationBadge?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -62,15 +46,15 @@ const COLUMNS = [
 ] as const;
 
 // ---------------------------------------------------------------------------
-// Pulse hook — detect newly arrived orders
+// Pulse hook
 // ---------------------------------------------------------------------------
 
-function useNewOrderIds(orders: Order[]): Set<string> {
+function useNewTicketIds(tickets: TicketData[]): Set<string> {
   const previousIdsRef = useRef<Set<string>>(new Set());
   const [pulsingIds, setPulsingIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    const currentIds = new Set(orders.map((o) => o.id));
+    const currentIds = new Set(tickets.map((t) => t.id));
     const newIds = new Set<string>();
 
     currentIds.forEach((id) => {
@@ -83,15 +67,10 @@ function useNewOrderIds(orders: Order[]): Set<string> {
 
     if (newIds.size > 0) {
       setPulsingIds(newIds);
-
-      // Remove pulse after 3 seconds
-      const timeout = setTimeout(() => {
-        setPulsingIds(new Set());
-      }, 3_000);
-
+      const timeout = setTimeout(() => setPulsingIds(new Set()), 3_000);
       return () => clearTimeout(timeout);
     }
-  }, [orders]);
+  }, [tickets]);
 
   return pulsingIds;
 }
@@ -101,29 +80,28 @@ function useNewOrderIds(orders: Order[]): Set<string> {
 // ---------------------------------------------------------------------------
 
 export function KitchenBoard({
-  orders,
+  tickets,
   onItemStatusChange,
-  onOrderStatusChange,
+  onTicketStatusChange,
+  showStationBadge = false,
 }: KitchenBoardProps) {
-  const pulsingIds = useNewOrderIds(orders);
+  const pulsingIds = useNewTicketIds(tickets);
 
-  // Group orders by status
   const grouped = {
-    pending: orders.filter((o) => o.status === "pending"),
-    in_progress: orders.filter((o) => o.status === "in_progress"),
-    ready: orders.filter((o) => o.status === "ready"),
+    pending: tickets.filter((t) => t.status === "pending"),
+    in_progress: tickets.filter((t) => t.status === "in_progress"),
+    ready: tickets.filter((t) => t.status === "ready"),
   };
 
   return (
     <div className="flex h-full w-full gap-4 overflow-x-auto p-4">
       {COLUMNS.map((col) => {
-        const columnOrders = grouped[col.key];
+        const columnTickets = grouped[col.key];
         return (
           <div
             key={col.key}
             className="flex min-w-[340px] flex-1 flex-col overflow-hidden rounded-xl bg-muted/30 ring-1 ring-foreground/5"
           >
-            {/* Column header */}
             <div
               className={cn(
                 "flex items-center justify-between px-4 py-3",
@@ -140,31 +118,31 @@ export function KitchenBoard({
                   "border border-white/30"
                 )}
               >
-                {columnOrders.length}
+                {columnTickets.length}
               </Badge>
             </div>
 
-            {/* Scrollable ticket list */}
             <ScrollArea className="flex-1">
               <div className="space-y-3 p-3">
-                {columnOrders.length === 0 ? (
+                {columnTickets.length === 0 ? (
                   <p className="py-12 text-center text-sm text-muted-foreground">
                     Aucune commande
                   </p>
                 ) : (
-                  columnOrders.map((order) => (
+                  columnTickets.map((ticket) => (
                     <div
-                      key={order.id}
+                      key={ticket.id}
                       className={cn(
                         "rounded-xl transition-shadow",
-                        pulsingIds.has(order.id) &&
+                        pulsingIds.has(ticket.id) &&
                           "animate-pulse ring-2 ring-red-400 shadow-lg shadow-red-400/25"
                       )}
                     >
                       <KitchenTicket
-                        order={order}
+                        ticket={ticket}
                         onItemStatusChange={onItemStatusChange}
-                        onOrderStatusChange={onOrderStatusChange}
+                        onTicketStatusChange={onTicketStatusChange}
+                        showStationBadge={showStationBadge}
                       />
                     </div>
                   ))

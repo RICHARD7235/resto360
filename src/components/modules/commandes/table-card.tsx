@@ -13,6 +13,7 @@ interface TableCardProps {
   elapsedMinutes?: number;
   onClick: () => void;
   isSelected?: boolean;
+  stationBadges?: { station_name: string; station_color: string; status: string }[];
 }
 
 const statusConfig: Record<
@@ -56,6 +57,7 @@ export function TableCard({
   elapsedMinutes,
   onClick,
   isSelected = false,
+  stationBadges,
 }: TableCardProps) {
   const config = statusConfig[status];
 
@@ -97,6 +99,23 @@ export function TableCard({
             <span className="text-[11px] text-muted-foreground">
               {elapsedMinutes} min
             </span>
+          )}
+
+          {stationBadges && stationBadges.length > 0 && (
+            <div className="flex gap-1 mt-1">
+              {stationBadges.map((badge) => (
+                <span
+                  key={badge.station_name}
+                  className={cn(
+                    "size-2.5 rounded-full",
+                    badge.status === "ready" && "ring-2 ring-green-400",
+                    badge.status === "in_progress" && "animate-pulse"
+                  )}
+                  style={{ backgroundColor: badge.station_color }}
+                  title={`${badge.station_name}: ${badge.status}`}
+                />
+              ))}
+            </div>
           )}
         </div>
       )}

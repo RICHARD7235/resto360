@@ -105,6 +105,7 @@ export type Database = {
       menu_categories: {
         Row: {
           created_at: string | null
+          default_station_id: string | null
           id: string
           name: string
           restaurant_id: string
@@ -112,6 +113,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          default_station_id?: string | null
           id?: string
           name: string
           restaurant_id: string
@@ -119,12 +121,20 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          default_station_id?: string | null
           id?: string
           name?: string
           restaurant_id?: string
           sort_order?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "menu_categories_default_station_id_fkey"
+            columns: ["default_station_id"]
+            isOneToOne: false
+            referencedRelation: "preparation_stations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "menu_categories_restaurant_id_fkey"
             columns: ["restaurant_id"]
@@ -249,6 +259,7 @@ export type Database = {
           menu_name: string | null
           notes: string | null
           order_id: string
+          preparation_ticket_id: string | null
           product_id: string | null
           product_name: string
           quantity: number
@@ -262,6 +273,7 @@ export type Database = {
           menu_name?: string | null
           notes?: string | null
           order_id: string
+          preparation_ticket_id?: string | null
           product_id?: string | null
           product_name: string
           quantity?: number
@@ -275,6 +287,7 @@ export type Database = {
           menu_name?: string | null
           notes?: string | null
           order_id?: string
+          preparation_ticket_id?: string | null
           product_id?: string | null
           product_name?: string
           quantity?: number
@@ -294,6 +307,13 @@ export type Database = {
             columns: ["order_id"]
             isOneToOne: false
             referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_preparation_ticket_id_fkey"
+            columns: ["preparation_ticket_id"]
+            isOneToOne: false
+            referencedRelation: "preparation_tickets"
             referencedColumns: ["id"]
           },
           {
@@ -356,6 +376,89 @@ export type Database = {
           },
         ]
       }
+      preparation_stations: {
+        Row: {
+          color: string
+          created_at: string
+          display_order: number
+          id: string
+          is_active: boolean
+          name: string
+          restaurant_id: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          name: string
+          restaurant_id: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          restaurant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "preparation_stations_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      preparation_tickets: {
+        Row: {
+          created_at: string
+          id: string
+          order_id: string
+          ready_at: string | null
+          started_at: string | null
+          station_id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          order_id: string
+          ready_at?: string | null
+          started_at?: string | null
+          station_id: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          order_id?: string
+          ready_at?: string | null
+          started_at?: string | null
+          station_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "preparation_tickets_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "preparation_tickets_station_id_fkey"
+            columns: ["station_id"]
+            isOneToOne: false
+            referencedRelation: "preparation_stations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           allergens: string[] | null
@@ -370,6 +473,7 @@ export type Database = {
           price: number
           restaurant_id: string
           sort_order: number | null
+          station_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -385,6 +489,7 @@ export type Database = {
           price?: number
           restaurant_id: string
           sort_order?: number | null
+          station_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -400,6 +505,7 @@ export type Database = {
           price?: number
           restaurant_id?: string
           sort_order?: number | null
+          station_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -415,6 +521,13 @@ export type Database = {
             columns: ["restaurant_id"]
             isOneToOne: false
             referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_station_id_fkey"
+            columns: ["station_id"]
+            isOneToOne: false
+            referencedRelation: "preparation_stations"
             referencedColumns: ["id"]
           },
         ]
@@ -700,7 +813,7 @@ export type Database = {
           full_name: string
           hourly_rate?: number | null
           id?: string
-          is_available?: boolean | null
+          is_active?: boolean | null
           phone?: string | null
           profile_id?: string | null
           restaurant_id: string

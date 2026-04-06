@@ -40,16 +40,19 @@ import {
   getMenus,
   toggleMenuAvailability,
   deleteMenu,
+  updateCategoryStation,
 } from "./actions";
 import type {
   CarteStats,
   RecipeWithIngredients,
   MenuWithItems,
 } from "./actions";
+import { getActiveStations } from "@/app/(dashboard)/admin-operationnelle/actions";
 import type { Tables } from "@/types/database.types";
 
 type Product = Tables<"products">;
 type MenuCategory = Tables<"menu_categories">;
+type Station = Tables<"preparation_stations">;
 
 export default function CartePage() {
   const {
@@ -68,6 +71,7 @@ export default function CartePage() {
   } = useCarteStore();
 
   const [categories, setCategories] = useState<MenuCategory[]>([]);
+  const [stations, setStations] = useState<Station[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [recipes, setRecipes] = useState<RecipeWithIngredients[]>([]);
   const [menus, setMenus] = useState<MenuWithItems[]>([]);
@@ -98,14 +102,16 @@ export default function CartePage() {
 
   const loadData = useCallback(async () => {
     try {
-      const [cats, prods, recs, mns, st] = await Promise.all([
+      const [cats, stns, prods, recs, mns, st] = await Promise.all([
         getCategories(),
+        getActiveStations(),
         getProducts(),
         getRecipes(),
         getMenus(),
         getCarteStats(),
       ]);
       setCategories(cats);
+      setStations(stns);
       setProducts(prods);
       setRecipes(recs);
       setMenus(mns);
@@ -220,6 +226,22 @@ export default function CartePage() {
     } finally {
       setFormLoading(false);
     }
+  }
+
+  // -----------------------------------------------------------------------
+  // Category station handler
+  // -----------------------------------------------------------------------
+
+  async function handleUpdateCategoryStation(
+    categoryId: string,
+    stationId: string | null
+  ) {
+    await updateCategoryStation(categoryId, stationId);
+    setCategories((prev) =>
+      prev.map((c) =>
+        c.id === categoryId ? { ...c, default_station_id: stationId } : c
+      )
+    );
   }
 
   // -----------------------------------------------------------------------
@@ -396,10 +418,12 @@ export default function CartePage() {
           <MenuEditor
             categories={categories}
             products={filteredProducts}
+            stations={stations}
             onToggleAvailability={handleToggleAvailability}
             onEditProduct={handleEditProduct}
             onDeleteProduct={handleDeleteProduct}
             onNewProduct={handleNewProduct}
+            onUpdateCategoryStation={handleUpdateCategoryStation}
           />
         </TabsContent>
 
@@ -428,6 +452,7 @@ export default function CartePage() {
         product={editingProduct}
         categories={categories}
         defaultCategoryId={defaultCategoryId}
+        stations={stations}
         onSubmit={handleProductSubmit}
         loading={formLoading}
       />

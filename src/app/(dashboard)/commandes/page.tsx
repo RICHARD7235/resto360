@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Plus, ChefHat } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -11,8 +11,9 @@ import {
   getActiveOrders,
   getOrderStats,
   updateOrderStatus,
+  getPreparationTickets,
 } from "./actions";
-import type { OrderWithItems, OrderStats } from "./actions";
+import type { OrderWithItems, OrderStats, PreparationTicketWithItems } from "./actions";
 
 // ---------------------------------------------------------------------------
 // Tables de La Cabane Qui Fume (configuration statique pour le MVP)
@@ -23,7 +24,7 @@ const RESTAURANT_TABLES = [
   "T7", "T8", "T9", "T10", "T11", "T12",
 ];
 
-function getTableStatus(orders: OrderWithItems[], tableNumber: string) {
+function getTableStatus(orders: OrderWithItems[], tableNumber: string, tickets: PreparationTicketWithItems[]) {
   const order = orders.find(
     (o) => o.table_number === tableNumber && !["paid", "cancelled"].includes(o.status ?? "")
   );
@@ -36,11 +37,21 @@ function getTableStatus(orders: OrderWithItems[], tableNumber: string) {
     served: "occupied",
   };
 
+  const orderTickets = tickets.filter((t) => t.order_id === order.id);
+  const stationBadges = orderTickets
+    .filter((t) => t.status !== "served")
+    .map((t) => ({
+      station_name: t.station_name,
+      station_color: t.station_color,
+      status: t.status,
+    }));
+
   return {
     status: statusMap[order.status ?? ""] ?? ("occupied" as const),
     orderTotal: order.total ?? undefined,
     orderCreatedAt: order.created_at ?? undefined,
     guestCount: order.order_items.length,
+    stationBadges,
   };
 }
 
@@ -72,6 +83,46 @@ function CommandesStats({ stats }: { stats: OrderStats }) {
 }
 
 // ---------------------------------------------------------------------------
+// Notification hook
+// ---------------------------------------------------------------------------
+
+function useTicketReadyNotifications(tickets: PreparationTicketWithItems[]) {
+  const previousReadyRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (typeof window === "undefined" || Notification.permission === "denied") return;
+
+    const currentReady = new Set(
+      tickets.filter((t) => t.status === "ready").map((t) => t.id)
+    );
+
+    const newlyReady = [...currentReady].filter(
+      (id) => !previousReadyRef.current.has(id)
+    );
+
+    previousReadyRef.current = currentReady;
+
+    if (newlyReady.length === 0) return;
+
+    for (const ticketId of newlyReady) {
+      const ticket = tickets.find((t) => t.id === ticketId);
+      if (!ticket) continue;
+
+      const title = ticket.table_number
+        ? `Table ${ticket.table_number}`
+        : "A emporter";
+
+      if (Notification.permission === "granted") {
+        new Notification(`${title} — ${ticket.station_name} pret`, {
+          body: `${ticket.items.length} article(s) a recuperer`,
+          tag: ticketId,
+        });
+      }
+    }
+  }, [tickets]);
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -85,16 +136,25 @@ export default function CommandesPage() {
     completedOrders: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [prepTickets, setPrepTickets] = useState<PreparationTicketWithItems[]>([]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
 
   const fetchData = useCallback(async () => {
     try {
       const today = new Date().toISOString().slice(0, 10);
-      const [ordersData, statsData] = await Promise.all([
+      const [ordersData, statsData, ticketsData] = await Promise.all([
         getActiveOrders(),
         getOrderStats(today),
+        getPreparationTickets(),
       ]);
       setOrders(ordersData);
       setStats(statsData);
+      setPrepTickets(ticketsData);
     } catch (error) {
       console.error("Erreur chargement commandes:", error);
     } finally {
@@ -104,14 +164,16 @@ export default function CommandesPage() {
 
   useEffect(() => {
     fetchData();
-    // Refresh toutes les 30s pour le temps réel basique
-    const interval = setInterval(fetchData, 30000);
+    // Refresh toutes les 15s pour le temps réel basique
+    const interval = setInterval(fetchData, 15000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
+  useTicketReadyNotifications(prepTickets);
+
   const tables = RESTAURANT_TABLES.map((t) => ({
     tableNumber: t,
-    ...getTableStatus(orders, t),
+    ...getTableStatus(orders, t, prepTickets),
   }));
 
   const selectedOrder = selectedTable
