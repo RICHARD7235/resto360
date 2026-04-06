@@ -19,7 +19,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { createTreasuryEntry } from "@/app/(dashboard)/caisse/actions";
 import type { TreasuryEntry, TreasuryCategory, TreasuryType } from "@/types/caisse";
 import { TREASURY_CATEGORY_LABELS } from "@/types/caisse";
@@ -117,30 +116,24 @@ export function TreasuryForm({ open, onOpenChange, onCreated }: TreasuryFormProp
           {/* Type */}
           <div className="space-y-2">
             <Label>Type</Label>
-            <RadioGroup
-              value={form.type}
-              onValueChange={(v) => set("type", v as TreasuryType)}
-              className="flex gap-6"
-            >
-              <div className="flex items-center gap-2">
-                <RadioGroupItem value="income" id="te-income" className="h-5 w-5" />
-                <Label
-                  htmlFor="te-income"
-                  className="cursor-pointer font-normal text-emerald-700"
-                >
-                  Entrée
-                </Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <RadioGroupItem value="expense" id="te-expense" className="h-5 w-5" />
-                <Label
-                  htmlFor="te-expense"
-                  className="cursor-pointer font-normal text-red-600"
-                >
-                  Sortie
-                </Label>
-              </div>
-            </RadioGroup>
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                variant={form.type === "income" ? "default" : "outline"}
+                className={`h-11 flex-1 ${form.type === "income" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : ""}`}
+                onClick={() => set("type", "income")}
+              >
+                Entrée
+              </Button>
+              <Button
+                type="button"
+                variant={form.type === "expense" ? "default" : "outline"}
+                className={`h-11 flex-1 ${form.type === "expense" ? "bg-red-600 hover:bg-red-700 text-white" : ""}`}
+                onClick={() => set("type", "expense")}
+              >
+                Sortie
+              </Button>
+            </div>
           </div>
 
           {/* Category */}
