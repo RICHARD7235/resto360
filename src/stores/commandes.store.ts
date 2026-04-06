@@ -10,6 +10,8 @@ export interface CartItem {
   unit_price: number;
   quantity: number;
   notes: string;
+  menu_id?: string;
+  menu_name?: string;
 }
 
 export interface CommandesState {

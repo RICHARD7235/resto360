@@ -12,6 +12,8 @@ type OrderRow = Tables<"orders">;
 type OrderItemRow = Tables<"order_items">;
 type ProductRow = Tables<"products">;
 type MenuCategoryRow = Tables<"menu_categories">;
+type MenuRow = Tables<"menus">;
+type MenuItemRow = Tables<"menu_items">;
 
 export type OrderStatus =
   | "pending"
@@ -33,12 +35,22 @@ export interface OrderWithItems extends OrderRow {
   order_items: OrderItemRow[];
 }
 
+export interface MenuItemWithProduct extends MenuItemRow {
+  product?: ProductRow | null;
+}
+
+export interface MenuWithItems extends MenuRow {
+  items: MenuItemWithProduct[];
+}
+
 interface OrderItemInput {
   product_id: string;
   product_name: string;
   quantity: number;
   unit_price: number;
   notes?: string;
+  menu_id?: string;
+  menu_name?: string;
 }
 
 export interface OrderStats {
@@ -290,6 +302,54 @@ export async function getOrderStats(date: string): Promise<OrderStats> {
 }
 
 // ---------------------------------------------------------------------------
+// Menus for order
+// ---------------------------------------------------------------------------
+
+export async function getMenusForOrder(): Promise<MenuWithItems[]> {
+  const restaurantId = await getUserRestaurantId();
+  const supabase = await createClient();
+
+  const { data: menus, error: menusError } = await supabase
+    .from("menus")
+    .select("*")
+    .eq("restaurant_id", restaurantId)
+    .eq("is_available", true)
+    .order("sort_order", { ascending: true });
+
+  if (menusError) throw new Error(`Erreur menus: ${menusError.message}`);
+  if (!menus || menus.length === 0) return [];
+
+  const menuIds = menus.map((m) => m.id);
+  const { data: menuItems } = await supabase
+    .from("menu_items")
+    .select("*")
+    .in("menu_id", menuIds)
+    .order("sort_order", { ascending: true });
+
+  const productIds = (menuItems ?? [])
+    .map((mi) => mi.product_id)
+    .filter((id): id is string => id !== null);
+  let products: ProductRow[] = [];
+  if (productIds.length > 0) {
+    const { data } = await supabase
+      .from("products")
+      .select("*")
+      .in("id", productIds);
+    products = data ?? [];
+  }
+
+  return menus.map((menu) => ({
+    ...menu,
+    items: (menuItems ?? [])
+      .filter((mi) => mi.menu_id === menu.id)
+      .map((mi) => ({
+        ...mi,
+        product: products.find((p) => p.id === mi.product_id) ?? null,
+      })),
+  }));
+}
+
+// ---------------------------------------------------------------------------
 // Mutations
 // ---------------------------------------------------------------------------
 
@@ -335,6 +395,8 @@ export async function createOrder(data: {
     unit_price: item.unit_price,
     notes: item.notes ?? null,
     status: "pending" as const,
+    menu_id: item.menu_id ?? null,
+    menu_name: item.menu_name ?? null,
   }));
 
   const { data: orderItems, error: itemsError } = await supabase

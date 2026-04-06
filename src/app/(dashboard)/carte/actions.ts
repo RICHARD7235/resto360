@@ -10,6 +10,8 @@ import type { Tables, Database } from "@/types/database.types";
 
 type ProductRow = Tables<"products">;
 type MenuCategoryRow = Tables<"menu_categories">;
+type MenuRow = Tables<"menus">;
+type MenuItemRow = Tables<"menu_items">;
 type RecipeRow = Tables<"recipes">;
 type RecipeIngredientRow = Tables<"recipe_ingredients">;
 
@@ -28,11 +30,20 @@ export interface CategoryWithProducts extends MenuCategoryRow {
   products: ProductRow[];
 }
 
+export interface MenuItemWithProduct extends MenuItemRow {
+  product?: ProductRow | null;
+}
+
+export interface MenuWithItems extends MenuRow {
+  items: MenuItemWithProduct[];
+}
+
 export interface CarteStats {
   totalProducts: number;
   availableProducts: number;
   totalRecipes: number;
   avgFoodCostRatio: number;
+  totalMenus: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -342,6 +353,108 @@ export async function deleteRecipe(id: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Menus & Formules
+// ---------------------------------------------------------------------------
+
+export async function getMenus(): Promise<MenuWithItems[]> {
+  const supabase = await getSupabase();
+
+  const { data: menus, error: menusError } = await supabase
+    .from("menus")
+    .select("*")
+    .order("sort_order", { ascending: true });
+  if (menusError) throw menusError;
+  if (!menus || menus.length === 0) return [];
+
+  // Fetch all menu_items for these menus
+  const menuIds = menus.map((m) => m.id);
+  const { data: menuItems, error: itemsError } = await supabase
+    .from("menu_items")
+    .select("*")
+    .in("menu_id", menuIds)
+    .order("sort_order", { ascending: true });
+  if (itemsError) throw itemsError;
+
+  // Fetch products referenced by menu_items
+  const productIds = (menuItems ?? [])
+    .map((mi) => mi.product_id)
+    .filter((id): id is string => id !== null);
+  let products: ProductRow[] = [];
+  if (productIds.length > 0) {
+    const { data } = await supabase
+      .from("products")
+      .select("*")
+      .in("id", productIds);
+    products = data ?? [];
+  }
+
+  return menus.map((menu) => ({
+    ...menu,
+    items: (menuItems ?? [])
+      .filter((mi) => mi.menu_id === menu.id)
+      .map((mi) => ({
+        ...mi,
+        product: products.find((p) => p.id === mi.product_id) ?? null,
+      })),
+  }));
+}
+
+export async function getMenu(id: string): Promise<MenuWithItems | null> {
+  const supabase = await getSupabase();
+
+  const { data: menu, error } = await supabase
+    .from("menus")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (error) return null;
+
+  const { data: menuItems } = await supabase
+    .from("menu_items")
+    .select("*")
+    .eq("menu_id", id)
+    .order("sort_order", { ascending: true });
+
+  const productIds = (menuItems ?? [])
+    .map((mi) => mi.product_id)
+    .filter((pid): pid is string => pid !== null);
+  let products: ProductRow[] = [];
+  if (productIds.length > 0) {
+    const { data } = await supabase
+      .from("products")
+      .select("*")
+      .in("id", productIds);
+    products = data ?? [];
+  }
+
+  return {
+    ...menu,
+    items: (menuItems ?? []).map((mi) => ({
+      ...mi,
+      product: products.find((p) => p.id === mi.product_id) ?? null,
+    })),
+  };
+}
+
+export async function toggleMenuAvailability(
+  id: string,
+  isAvailable: boolean
+): Promise<void> {
+  const supabase = await getSupabase();
+  const { error } = await supabase
+    .from("menus")
+    .update({ is_available: isAvailable, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteMenu(id: string): Promise<void> {
+  const supabase = await getSupabase();
+  const { error } = await supabase.from("menus").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// ---------------------------------------------------------------------------
 // Stats
 // ---------------------------------------------------------------------------
 
@@ -351,6 +464,9 @@ export async function getCarteStats(): Promise<CarteStats> {
   const { data: products } = await supabase.from("products").select("*");
   const { count: recipeCount } = await supabase
     .from("recipes")
+    .select("*", { count: "exact", head: true });
+  const { count: menuCount } = await supabase
+    .from("menus")
     .select("*", { count: "exact", head: true });
 
   const allProducts = products ?? [];
@@ -368,5 +484,6 @@ export async function getCarteStats(): Promise<CarteStats> {
     availableProducts: allProducts.filter((p) => p.is_available).length,
     totalRecipes: recipeCount ?? 0,
     avgFoodCostRatio: Math.round(avgRatio * 100),
+    totalMenus: menuCount ?? 0,
   };
 }

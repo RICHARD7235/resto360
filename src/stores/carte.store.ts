@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-type Tab = "carte" | "recettes";
+type Tab = "carte" | "menus" | "recettes";
 
 interface CarteState {
   activeTab: Tab;

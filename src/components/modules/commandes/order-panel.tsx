@@ -74,6 +74,9 @@ export function OrderPanel({
                     {item.product_name}
                   </span>
                   <span className="text-xs text-muted-foreground">
+                    {item.menu_name ? (
+                      <span className="text-primary">{item.menu_name} &middot; </span>
+                    ) : null}
                     {formatPrice(item.unit_price)} / unit\u00E9
                   </span>
                 </div>

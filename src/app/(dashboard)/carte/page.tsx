@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import {
   BookOpen,
   ChefHat,
+  ClipboardList,
   Percent,
   Plus,
   Search,
@@ -21,6 +22,7 @@ import { RecipeList } from "@/components/modules/carte/recipe-list";
 import { RecipeDetail } from "@/components/modules/carte/recipe-detail";
 import { RecipeForm } from "@/components/modules/carte/recipe-form";
 import type { RecipeFormData } from "@/components/modules/carte/recipe-form";
+import { MenuFormulasList } from "@/components/modules/carte/menu-formulas-list";
 import {
   getCategories,
   getProducts,
@@ -35,10 +37,14 @@ import {
   updateRecipe,
   deleteRecipe,
   getCarteStats,
+  getMenus,
+  toggleMenuAvailability,
+  deleteMenu,
 } from "./actions";
 import type {
   CarteStats,
   RecipeWithIngredients,
+  MenuWithItems,
 } from "./actions";
 import type { Tables } from "@/types/database.types";
 
@@ -64,11 +70,13 @@ export default function CartePage() {
   const [categories, setCategories] = useState<MenuCategory[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [recipes, setRecipes] = useState<RecipeWithIngredients[]>([]);
+  const [menus, setMenus] = useState<MenuWithItems[]>([]);
   const [stats, setStats] = useState<CarteStats>({
     totalProducts: 0,
     availableProducts: 0,
     totalRecipes: 0,
     avgFoodCostRatio: 0,
+    totalMenus: 0,
   });
   const [loading, setLoading] = useState(true);
   const [formLoading, setFormLoading] = useState(false);
@@ -90,15 +98,17 @@ export default function CartePage() {
 
   const loadData = useCallback(async () => {
     try {
-      const [cats, prods, recs, st] = await Promise.all([
+      const [cats, prods, recs, mns, st] = await Promise.all([
         getCategories(),
         getProducts(),
         getRecipes(),
+        getMenus(),
         getCarteStats(),
       ]);
       setCategories(cats);
       setProducts(prods);
       setRecipes(recs);
+      setMenus(mns);
       setStats(st);
     } catch (err) {
       console.error("Erreur chargement carte:", err);
@@ -213,6 +223,22 @@ export default function CartePage() {
   }
 
   // -----------------------------------------------------------------------
+  // Menu handlers
+  // -----------------------------------------------------------------------
+
+  async function handleToggleMenuAvailability(id: string, available: boolean) {
+    await toggleMenuAvailability(id, available);
+    setMenus((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, is_available: available } : m))
+    );
+  }
+
+  async function handleDeleteMenu(id: string) {
+    await deleteMenu(id);
+    loadData();
+  }
+
+  // -----------------------------------------------------------------------
   // Filtered data
   // -----------------------------------------------------------------------
 
@@ -231,6 +257,16 @@ export default function CartePage() {
             .includes(searchQuery.toLowerCase())
       )
     : recipes;
+
+  const filteredMenus = searchQuery
+    ? menus.filter(
+        (m) =>
+          m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (m.description ?? "")
+            .toLowerCase()
+            .includes(searchQuery.toLowerCase())
+      )
+    : menus;
 
   // -----------------------------------------------------------------------
   // Render
@@ -319,13 +355,17 @@ export default function CartePage() {
       {/* Tabs: Carte / Fiches techniques */}
       <Tabs
         value={activeTab}
-        onValueChange={(v) => setActiveTab(v as "carte" | "recettes")}
+        onValueChange={(v) => setActiveTab(v as "carte" | "menus" | "recettes")}
       >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <TabsList>
             <TabsTrigger value="carte" className="gap-2">
               <UtensilsCrossed className="h-4 w-4" />
               Carte ({stats.totalProducts})
+            </TabsTrigger>
+            <TabsTrigger value="menus" className="gap-2">
+              <ClipboardList className="h-4 w-4" />
+              Menus ({stats.totalMenus})
             </TabsTrigger>
             <TabsTrigger value="recettes" className="gap-2">
               <BookOpen className="h-4 w-4" />
@@ -360,6 +400,14 @@ export default function CartePage() {
             onEditProduct={handleEditProduct}
             onDeleteProduct={handleDeleteProduct}
             onNewProduct={handleNewProduct}
+          />
+        </TabsContent>
+
+        <TabsContent value="menus" className="mt-4">
+          <MenuFormulasList
+            menus={filteredMenus}
+            onToggleAvailability={handleToggleMenuAvailability}
+            onDelete={handleDeleteMenu}
           />
         </TabsContent>
 
