@@ -443,7 +443,7 @@ export async function getPreparationTickets(
     .from("preparation_tickets")
     .select("*")
     .in("order_id", orderIds)
-    .in("status", ["sent", "preparing", "ready"])
+    .in("status", ["pending", "in_progress", "ready"])
     .order("created_at", { ascending: true });
 
   if (stationId) {
