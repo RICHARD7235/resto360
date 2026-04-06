@@ -134,10 +134,25 @@ export default function ReservationsPage() {
   }
 
   async function handleFormSubmit(data: ReservationFormData) {
+    // Convertir les chaînes vides en null pour les champs optionnels
+    const cleaned = {
+      customer_name: data.customer_name,
+      date: data.date,
+      time: data.time,
+      party_size: data.party_size,
+      customer_phone: data.customer_phone || null,
+      customer_email: data.customer_email || null,
+      end_time: data.end_time || null,
+      type: data.type || null,
+      table_number: data.table_number || null,
+      notes: data.notes || null,
+      ...(data.status ? { status: data.status } : {}),
+    };
+
     if (editingReservation) {
-      await updateReservation(editingReservation.id, data);
+      await updateReservation(editingReservation.id, cleaned);
     } else {
-      await createReservation(data);
+      await createReservation(cleaned);
     }
     setFormOpen(false);
     setEditingReservation(null);

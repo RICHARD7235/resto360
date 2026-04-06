@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, type FormEvent } from "react";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -131,6 +132,9 @@ export function ReservationForm({
     try {
       await onSubmit(formData);
       onOpenChange(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erreur lors de l'enregistrement";
+      toast.error(message);
     } finally {
       setLoading(false);
     }
