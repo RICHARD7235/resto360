@@ -100,11 +100,11 @@ export function KitchenTicket({
 
   const statusConfig = getStatusConfig(ticket.status);
   const isLate = elapsedMinutes > 15;
-  const allItemsDone = ticket.items.length > 0 && ticket.items.every((i) => i.status === "done");
+  const allItemsDone = ticket.items.length > 0 && ticket.items.every((i) => i.status === "ready");
 
   const handleToggleItem = useCallback(
     (item: TicketItem) => {
-      const nextStatus = item.status === "done" ? "pending" : "done";
+      const nextStatus = item.status === "ready" ? "pending" : "ready";
       onItemStatusChange(item.id, nextStatus);
     },
     [onItemStatusChange]
@@ -189,7 +189,7 @@ export function KitchenTicket({
 
       <CardContent className="space-y-1 py-3">
         {ticket.items.map((item) => {
-          const isDone = item.status === "done";
+          const isDone = item.status === "ready";
           return (
             <div
               key={item.id}

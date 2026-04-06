@@ -164,8 +164,8 @@ export default function CommandesPage() {
 
   useEffect(() => {
     fetchData();
-    // Refresh toutes les 30s pour le temps réel basique
-    const interval = setInterval(fetchData, 30000);
+    // Refresh toutes les 15s pour le temps réel basique
+    const interval = setInterval(fetchData, 15000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
