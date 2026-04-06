@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { PersonnelTabs } from "@/components/modules/personnel/personnel-tabs";
 import { WeekSelector } from "@/components/modules/personnel/week-selector";
 import { ScheduleGrid } from "@/components/modules/personnel/schedule-grid";
+import { ScheduleTimeline } from "@/components/modules/personnel/schedule-timeline";
 import { ShiftEditor } from "@/components/modules/personnel/shift-editor";
 import { usePersonnelStore } from "@/stores/personnel.store";
 import {
@@ -252,9 +253,11 @@ export default function PlanningPage() {
             onCellClick={openCreateShift}
           />
         ) : (
-          <div className="flex items-center justify-center py-16 text-muted-foreground text-sm">
-            Vue timeline — bientôt disponible
-          </div>
+          <ScheduleTimeline
+            shifts={shifts}
+            staffMembers={staffMembers}
+            weekStart={selectedWeekStart}
+          />
         )
       )}
 
