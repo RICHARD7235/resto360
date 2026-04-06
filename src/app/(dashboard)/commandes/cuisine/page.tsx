@@ -86,7 +86,7 @@ function CuisineContent() {
         </Button>
         <div className="flex-1">
           <h1 className="text-2xl font-bold tracking-tight">
-            {currentStation ? currentStation.name : "Ecran cuisine"}
+            {currentStation ? currentStation.name : "Écran cuisine"}
           </h1>
           <p className="text-muted-foreground">
             {tickets.length} ticket{tickets.length > 1 ? "s" : ""} actif

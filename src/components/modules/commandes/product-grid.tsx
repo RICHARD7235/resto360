@@ -19,12 +19,12 @@ interface ProductGridProps {
 // ---------------------------------------------------------------------------
 
 function formatPrice(price: number): string {
-  return price.toFixed(2) + " \u20AC";
+  return price.toFixed(2) + " €";
 }
 
 function truncate(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
-  return text.slice(0, maxLength).trimEnd() + "\u2026";
+  return text.slice(0, maxLength).trimEnd() + "…";
 }
 
 // ---------------------------------------------------------------------------
@@ -35,7 +35,7 @@ export function ProductGrid({ products, onAddProduct }: ProductGridProps) {
   if (products.length === 0) {
     return (
       <div className="flex items-center justify-center rounded-lg border border-dashed p-12 text-muted-foreground">
-        Aucun produit dans cette cat\u00E9gorie
+        Aucun produit dans cette catégorie
       </div>
     );
   }
@@ -88,7 +88,7 @@ export function ProductGrid({ products, onAddProduct }: ProductGridProps) {
 
               {hasAllergens && (
                 <Badge variant="secondary" className="w-fit text-[10px]">
-                  Allerg\u00E8nes
+                  Allergènes
                 </Badge>
               )}
             </CardContent>

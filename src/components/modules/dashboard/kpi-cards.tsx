@@ -26,7 +26,7 @@ function formatCurrency(amount: number) {
 }
 
 function TrendIndicator({ current, previous }: { current: number; previous: number }) {
-  if (!previous) return null;
+  if (!previous || !current) return null;
   const diff = ((current - previous) / previous) * 100;
   const isPositive = diff >= 0;
 

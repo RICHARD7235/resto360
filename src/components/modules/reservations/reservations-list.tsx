@@ -23,17 +23,17 @@ const statusConfig: Record<
   { label: string; className: string }
 > = {
   pending: { label: "En attente", className: "bg-yellow-100 text-yellow-800 border-yellow-200" },
-  confirmed: { label: "Confirmee", className: "bg-green-100 text-green-800 border-green-200" },
+  confirmed: { label: "Confirmée", className: "bg-green-100 text-green-800 border-green-200" },
   seated: { label: "En salle", className: "bg-blue-100 text-blue-800 border-blue-200" },
-  completed: { label: "Terminee", className: "bg-gray-100 text-gray-800 border-gray-200" },
-  cancelled: { label: "Annulee", className: "bg-red-100 text-red-800 border-red-200" },
+  completed: { label: "Terminée", className: "bg-gray-100 text-gray-800 border-gray-200" },
+  cancelled: { label: "Annulée", className: "bg-red-100 text-red-800 border-red-200" },
   no_show: { label: "No-show", className: "bg-red-100 text-red-800 border-red-200" },
 };
 
 const typeLabels: Record<string, string> = {
   restaurant: "Restaurant",
   salle: "Location salle",
-  seminaire: "Seminaire",
+  seminaire: "Séminaire",
 };
 
 export function ReservationsList({
@@ -44,7 +44,7 @@ export function ReservationsList({
     return (
       <div className="flex items-center justify-center py-12">
         <p className="text-sm text-muted-foreground">
-          Aucune reservation trouvee
+          Aucune réservation trouvée
         </p>
       </div>
     );

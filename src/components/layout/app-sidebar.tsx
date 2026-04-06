@@ -62,7 +62,7 @@ const modules = [
   {
     group: "Configuration",
     items: [
-      { name: "Admin operationnelle", href: "/admin-operationnelle", icon: Settings },
+      { name: "Admin opérationnelle", href: "/admin-operationnelle", icon: Settings },
     ],
   },
 ];

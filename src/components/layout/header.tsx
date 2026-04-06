@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { Bell, LogOut, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -16,6 +17,13 @@ import {
 import { logout } from "@/app/(auth)/connexion/actions";
 
 export function Header() {
+  const router = useRouter();
+
+  async function handleLogout() {
+    await logout();
+    router.push("/connexion");
+  }
+
   return (
     <header className="flex h-14 items-center gap-2 border-b bg-card px-4">
       <SidebarTrigger />
@@ -27,11 +35,8 @@ export function Header() {
         <Search className="h-4 w-4" />
       </Button>
 
-      <Button variant="ghost" size="icon" className="h-9 w-9 relative" aria-label="Notifications">
+      <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Notifications" disabled>
         <Bell className="h-4 w-4" />
-        <span className="absolute -top-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-destructive text-[10px] font-bold text-white flex items-center justify-center">
-          3
-        </span>
       </Button>
 
       <Separator orientation="vertical" className="h-6" />
@@ -55,7 +60,7 @@ export function Header() {
           <DropdownMenuSeparator />
           <DropdownMenuItem
             className="text-destructive"
-            onClick={() => logout()}
+            onClick={handleLogout}
           >
             <LogOut className="h-4 w-4 mr-2" />
             Déconnexion

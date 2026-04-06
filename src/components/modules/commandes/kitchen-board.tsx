@@ -31,14 +31,14 @@ const COLUMNS = [
   },
   {
     key: "in_progress" as const,
-    title: "En preparation",
+    title: "En préparation",
     headerBg: "bg-amber-500",
     headerText: "text-white",
     badgeBg: "bg-amber-600",
   },
   {
     key: "ready" as const,
-    title: "Pretes",
+    title: "Prêtes",
     headerBg: "bg-green-500",
     headerText: "text-white",
     badgeBg: "bg-green-600",

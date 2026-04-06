@@ -54,17 +54,17 @@ interface ReservationFormProps {
 
 const statusConfig: Record<string, string> = {
   pending: "En attente",
-  confirmed: "Confirmee",
+  confirmed: "Confirmée",
   seated: "En salle",
-  completed: "Terminee",
-  cancelled: "Annulee",
+  completed: "Terminée",
+  cancelled: "Annulée",
   no_show: "No-show",
 };
 
 const typeLabels: Record<string, string> = {
   restaurant: "Restaurant",
   salle: "Location salle",
-  seminaire: "Seminaire",
+  seminaire: "Séminaire",
 };
 
 const EMPTY_FORM: ReservationFormData = {
@@ -141,12 +141,12 @@ export function ReservationForm({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {isEditing ? "Modifier la reservation" : "Nouvelle reservation"}
+            {isEditing ? "Modifier la réservation" : "Nouvelle réservation"}
           </DialogTitle>
           <DialogDescription>
             {isEditing
-              ? "Modifiez les informations de la reservation."
-              : "Remplissez les informations pour creer une reservation."}
+              ? "Modifiez les informations de la réservation."
+              : "Remplissez les informations pour créer une réservation."}
           </DialogDescription>
         </DialogHeader>
 
@@ -168,7 +168,7 @@ export function ReservationForm({
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="customer_phone">Telephone</Label>
+              <Label htmlFor="customer_phone">Téléphone</Label>
               <Input
                 id="customer_phone"
                 type="tel"
@@ -312,7 +312,7 @@ export function ReservationForm({
               id="notes"
               value={formData.notes}
               onChange={(e) => updateField("notes", e.target.value)}
-              placeholder="Allergies, occasion speciale, demandes particulieres..."
+              placeholder="Allergies, occasion spéciale, demandes particulières..."
               rows={3}
             />
           </div>
@@ -330,7 +330,7 @@ export function ReservationForm({
             </Button>
             <Button type="submit" className="min-h-11" disabled={loading}>
               {loading && <Loader2 className="animate-spin" />}
-              {isEditing ? "Modifier la reservation" : "Creer la reservation"}
+              {isEditing ? "Modifier la réservation" : "Créer la réservation"}
             </Button>
           </DialogFooter>
         </form>

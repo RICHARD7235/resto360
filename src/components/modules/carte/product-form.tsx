@@ -165,13 +165,13 @@ export function ProductForm({
 
           {stations && stations.length > 0 && (
             <div className="space-y-2">
-              <Label htmlFor="product-station">Poste de preparation</Label>
+              <Label htmlFor="product-station">Poste de préparation</Label>
               <Select value={stationId || "none"} onValueChange={(v) => setStationId(!v || v === "none" ? "" : v)}>
                 <SelectTrigger id="product-station">
-                  <SelectValue placeholder="Poste de la categorie" />
+                  <SelectValue placeholder="Poste de la catégorie" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Poste de la categorie</SelectItem>
+                  <SelectItem value="none">Poste de la catégorie</SelectItem>
                   {stations.map((s) => (
                     <SelectItem key={s.id} value={s.id}>
                       {s.name}

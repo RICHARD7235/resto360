@@ -65,7 +65,7 @@ export function StationList({
     <>
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Postes de preparation</CardTitle>
+          <CardTitle>Postes de préparation</CardTitle>
           <Button className="min-h-11 gap-2" onClick={handleCreate}>
             <Plus className="h-4 w-4" />
             Nouveau poste
@@ -74,7 +74,7 @@ export function StationList({
         <CardContent>
           {stations.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              Aucun poste configure
+              Aucun poste configuré
             </p>
           ) : (
             <div className="space-y-2">

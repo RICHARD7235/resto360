@@ -136,7 +136,7 @@ export function MenuEditor({
                       className="h-8 w-44 text-xs"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <SelectValue placeholder="Poste de preparation" />
+                      <SelectValue placeholder="Poste de préparation" />
                     </SelectTrigger>
                     <SelectContent onClick={(e) => e.stopPropagation()}>
                       <SelectItem value="none">Aucun poste</SelectItem>

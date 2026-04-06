@@ -51,17 +51,17 @@ const statusConfig: Record<
   { label: string; variant: "default" | "secondary" | "destructive" | "outline" }
 > = {
   pending: { label: "En attente", variant: "outline" },
-  confirmed: { label: "Confirmee", variant: "default" },
+  confirmed: { label: "Confirmée", variant: "default" },
   seated: { label: "En salle", variant: "secondary" },
-  completed: { label: "Terminee", variant: "secondary" },
-  cancelled: { label: "Annulee", variant: "destructive" },
+  completed: { label: "Terminée", variant: "secondary" },
+  cancelled: { label: "Annulée", variant: "destructive" },
   no_show: { label: "No-show", variant: "destructive" },
 };
 
 const typeLabels: Record<string, string> = {
   restaurant: "Restaurant",
   salle: "Location salle",
-  seminaire: "Seminaire",
+  seminaire: "Séminaire",
 };
 
 // ---------------------------------------------------------------------------
@@ -222,7 +222,7 @@ export function ReservationDetail({
           <div>
             <SectionTitle>Contact</SectionTitle>
             {reservation.customer_phone && (
-              <InfoRow icon={Phone} label="Telephone">
+              <InfoRow icon={Phone} label="Téléphone">
                 <a
                   href={`tel:${reservation.customer_phone}`}
                   className="text-primary underline-offset-2 hover:underline"
@@ -250,7 +250,7 @@ export function ReservationDetail({
 
           {/* ---- Details ---- */}
           <div>
-            <SectionTitle>Details</SectionTitle>
+            <SectionTitle>Détails</SectionTitle>
             <InfoRow icon={CalendarDays} label="Date">
               {capitalize(formatDateFull(reservation.date))}
             </InfoRow>
@@ -296,8 +296,8 @@ export function ReservationDetail({
         {/* ---- Footer: timestamps ---- */}
         <SheetFooter>
           <div className="w-full space-y-0.5 text-xs text-muted-foreground">
-            <p>Cree le {formatTimestamp(reservation.created_at ?? new Date().toISOString())}</p>
-            <p>Modifie le {formatTimestamp(reservation.updated_at ?? new Date().toISOString())}</p>
+            <p>Créé le {formatTimestamp(reservation.created_at ?? new Date().toISOString())}</p>
+            <p>Modifié le {formatTimestamp(reservation.updated_at ?? new Date().toISOString())}</p>
           </div>
         </SheetFooter>
       </SheetContent>

@@ -24,7 +24,7 @@ interface OrderPanelProps {
 // ---------------------------------------------------------------------------
 
 function formatPrice(amount: number): string {
-  return amount.toFixed(2) + " \u20AC";
+  return amount.toFixed(2) + " €";
 }
 
 // ---------------------------------------------------------------------------
@@ -59,7 +59,7 @@ export function OrderPanel({
       <div className="flex-1 overflow-y-auto px-4 py-3">
         {isEmpty ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            Ajoutez des produits \u00E0 la commande
+            Ajoutez des produits à la commande
           </p>
         ) : (
           <ul className="flex flex-col gap-3">
@@ -77,7 +77,7 @@ export function OrderPanel({
                     {item.menu_name ? (
                       <span className="text-primary">{item.menu_name} &middot; </span>
                     ) : null}
-                    {formatPrice(item.unit_price)} / unit\u00E9
+                    {formatPrice(item.unit_price)} / unité
                   </span>
                 </div>
 
@@ -90,7 +90,7 @@ export function OrderPanel({
                     onClick={() =>
                       onUpdateQuantity(item.product_id, item.quantity - 1)
                     }
-                    aria-label={`R\u00E9duire ${item.product_name}`}
+                    aria-label={`Réduire ${item.product_name}`}
                   >
                     <Minus className="size-4" />
                   </Button>
@@ -161,7 +161,7 @@ export function OrderPanel({
             onClick={onSubmit}
             disabled={isEmpty || loading}
           >
-            {loading ? "Envoi en cours\u2026" : "Envoyer en cuisine"}
+            {loading ? "Envoi en cours…" : "Envoyer en cuisine"}
           </Button>
         </div>
       </div>
