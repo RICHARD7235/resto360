@@ -47,8 +47,8 @@ export function RecentReservations({ reservations }: RecentReservationsProps) {
             </p>
           )}
           {reservations.slice(0, 8).map((resa) => {
-            const status = statusConfig[resa.status] ?? statusConfig.pending;
-            const typeLabel = typeLabels[resa.type];
+            const status = statusConfig[resa.status ?? "pending"] ?? statusConfig.pending;
+            const typeLabel = typeLabels[resa.type ?? ""];
 
             return (
               <div

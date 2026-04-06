@@ -78,7 +78,7 @@ export default async function DashboardPage() {
 
   const upcomingReservations = reservations?.length ?? 0;
   const alertItems =
-    stockItems?.filter((i) => i.current_quantity <= i.min_threshold) ?? [];
+    stockItems?.filter((i) => (i.current_quantity ?? 0) <= (i.min_threshold ?? 0)) ?? [];
 
   return (
     <div className="space-y-6">

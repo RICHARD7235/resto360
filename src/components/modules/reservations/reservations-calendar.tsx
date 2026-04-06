@@ -111,9 +111,10 @@ export function ReservationsCalendar({
         ) : (
           <div className="space-y-2">
             {selectedDayReservations.map((resa) => {
+              const resaStatus = resa.status ?? "pending";
               const status =
-                statusConfig[resa.status] ?? statusConfig.pending;
-              const typeLabel = typeLabels[resa.type] ?? resa.type;
+                statusConfig[resaStatus] ?? statusConfig.pending;
+              const typeLabel = typeLabels[resa.type ?? ""] ?? resa.type;
 
               return (
                 <Card

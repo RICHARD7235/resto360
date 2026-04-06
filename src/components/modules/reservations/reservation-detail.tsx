@@ -199,7 +199,7 @@ export function ReservationDetail({
 }: ReservationDetailProps) {
   if (!reservation) return null;
 
-  const status = statusConfig[reservation.status] ?? statusConfig.pending;
+  const status = statusConfig[reservation.status ?? "pending"] ?? statusConfig.pending;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -278,7 +278,7 @@ export function ReservationDetail({
 
           {/* ---- Quick actions ---- */}
           <StatusActions
-            status={reservation.status}
+            status={reservation.status ?? "pending"}
             onStatusChange={onStatusChange}
           />
 

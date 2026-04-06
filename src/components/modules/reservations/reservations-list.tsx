@@ -66,8 +66,8 @@ export function ReservationsList({
       <TableBody>
         {reservations.map((resa) => {
           const status =
-            statusConfig[resa.status] ?? statusConfig.pending;
-          const typeLabel = typeLabels[resa.type] ?? resa.type;
+            statusConfig[resa.status ?? "pending"] ?? statusConfig.pending;
+          const typeLabel = typeLabels[resa.type ?? ""] ?? resa.type;
 
           return (
             <TableRow

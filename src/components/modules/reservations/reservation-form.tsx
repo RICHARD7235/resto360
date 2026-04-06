@@ -108,10 +108,10 @@ export function ReservationForm({
         time: reservation.time.slice(0, 5),
         end_time: reservation.end_time?.slice(0, 5) ?? "",
         party_size: reservation.party_size,
-        type: reservation.type,
+        type: reservation.type ?? "restaurant",
         table_number: reservation.table_number ?? "",
         notes: reservation.notes ?? "",
-        status: reservation.status,
+        status: reservation.status ?? "pending",
       });
     } else {
       setFormData(EMPTY_FORM);

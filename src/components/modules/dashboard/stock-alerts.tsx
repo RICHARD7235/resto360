@@ -11,7 +11,7 @@ interface StockAlertsProps {
 
 export function StockAlerts({ items }: StockAlertsProps) {
   const alerts = items.filter(
-    (item) => item.current_quantity <= item.min_threshold
+    (item) => (item.current_quantity ?? 0) <= (item.min_threshold ?? 0)
   );
 
   return (
@@ -30,7 +30,7 @@ export function StockAlerts({ items }: StockAlertsProps) {
         ) : (
           <div className="space-y-3">
             {alerts.map((item) => {
-              const ratio = item.current_quantity / item.min_threshold;
+              const ratio = (item.current_quantity ?? 0) / (item.min_threshold ?? 1);
               const severity = ratio < 0.5 ? "destructive" : "outline";
 
               return (

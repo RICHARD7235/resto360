@@ -49,8 +49,16 @@ export function KpiCards({
   upcomingReservations,
   stockAlerts,
 }: KpiCardsProps) {
-  const today = todayStats ?? { revenue: 0, covers: 0, occupancy_rate: 0 };
-  const yesterday = yesterdayStats ?? { revenue: 0, covers: 0, occupancy_rate: 0 };
+  const today = {
+    revenue: todayStats?.revenue ?? 0,
+    covers: todayStats?.covers ?? 0,
+    occupancy_rate: todayStats?.occupancy_rate ?? 0,
+  };
+  const yesterday = {
+    revenue: yesterdayStats?.revenue ?? 0,
+    covers: yesterdayStats?.covers ?? 0,
+    occupancy_rate: yesterdayStats?.occupancy_rate ?? 0,
+  };
 
   const cards = [
     {
