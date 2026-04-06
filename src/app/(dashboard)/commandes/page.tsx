@@ -25,7 +25,7 @@ const RESTAURANT_TABLES = [
 
 function getTableStatus(orders: OrderWithItems[], tableNumber: string) {
   const order = orders.find(
-    (o) => o.table_number === tableNumber && !["paid", "cancelled"].includes(o.status)
+    (o) => o.table_number === tableNumber && !["paid", "cancelled"].includes(o.status ?? "")
   );
   if (!order) return { status: "free" as const };
 
@@ -37,9 +37,9 @@ function getTableStatus(orders: OrderWithItems[], tableNumber: string) {
   };
 
   return {
-    status: statusMap[order.status] ?? ("occupied" as const),
-    orderTotal: order.total,
-    orderCreatedAt: order.created_at,
+    status: statusMap[order.status ?? ""] ?? ("occupied" as const),
+    orderTotal: order.total ?? undefined,
+    orderCreatedAt: order.created_at ?? undefined,
     guestCount: order.order_items.length,
   };
 }
@@ -118,7 +118,7 @@ export default function CommandesPage() {
     ? orders.find(
         (o) =>
           o.table_number === selectedTable &&
-          !["paid", "cancelled"].includes(o.status)
+          !["paid", "cancelled"].includes(o.status ?? "")
       )
     : null;
 
@@ -194,8 +194,19 @@ export default function CommandesPage() {
           {selectedOrder ? (
             <OrderSummary
               order={{
-                ...selectedOrder,
-                items: selectedOrder.order_items,
+                id: selectedOrder.id,
+                table_number: selectedOrder.table_number,
+                status: selectedOrder.status ?? "pending",
+                total: selectedOrder.total ?? 0,
+                notes: selectedOrder.notes,
+                created_at: selectedOrder.created_at ?? new Date().toISOString(),
+                items: selectedOrder.order_items.map((item) => ({
+                  id: item.id,
+                  product_name: item.product_name,
+                  quantity: item.quantity,
+                  unit_price: item.unit_price,
+                  status: item.status ?? "pending",
+                })),
               }}
               onViewDetail={() => {}}
               onStatusChange={handleStatusChange}
