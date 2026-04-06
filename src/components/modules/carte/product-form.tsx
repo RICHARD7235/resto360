@@ -70,7 +70,7 @@ export function ProductForm({
       setCostPrice(product.cost_price?.toString() ?? "");
       setCategoryId(product.category_id ?? "");
       setAllergens(product.allergens ?? []);
-      setIsAvailable(product.is_available);
+      setIsAvailable(product.is_available ?? true);
     } else {
       setName("");
       setDescription("");
