@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Plus, ChefHat } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -11,8 +11,9 @@ import {
   getActiveOrders,
   getOrderStats,
   updateOrderStatus,
+  getPreparationTickets,
 } from "./actions";
-import type { OrderWithItems, OrderStats } from "./actions";
+import type { OrderWithItems, OrderStats, PreparationTicketWithItems } from "./actions";
 
 // ---------------------------------------------------------------------------
 // Tables de La Cabane Qui Fume (configuration statique pour le MVP)
@@ -72,6 +73,46 @@ function CommandesStats({ stats }: { stats: OrderStats }) {
 }
 
 // ---------------------------------------------------------------------------
+// Notification hook
+// ---------------------------------------------------------------------------
+
+function useTicketReadyNotifications(tickets: PreparationTicketWithItems[]) {
+  const previousReadyRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (typeof window === "undefined" || Notification.permission === "denied") return;
+
+    const currentReady = new Set(
+      tickets.filter((t) => t.status === "ready").map((t) => t.id)
+    );
+
+    const newlyReady = [...currentReady].filter(
+      (id) => !previousReadyRef.current.has(id)
+    );
+
+    previousReadyRef.current = currentReady;
+
+    if (newlyReady.length === 0) return;
+
+    for (const ticketId of newlyReady) {
+      const ticket = tickets.find((t) => t.id === ticketId);
+      if (!ticket) continue;
+
+      const title = ticket.table_number
+        ? `Table ${ticket.table_number}`
+        : "A emporter";
+
+      if (Notification.permission === "granted") {
+        new Notification(`${title} — ${ticket.station_name} pret`, {
+          body: `${ticket.items.length} article(s) a recuperer`,
+          tag: ticketId,
+        });
+      }
+    }
+  }, [tickets]);
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -85,6 +126,13 @@ export default function CommandesPage() {
     completedOrders: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [prepTickets, setPrepTickets] = useState<PreparationTicketWithItems[]>([]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
 
   const fetchData = useCallback(async () => {
     try {
@@ -108,6 +156,8 @@ export default function CommandesPage() {
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
   }, [fetchData]);
+
+  useTicketReadyNotifications(prepTickets);
 
   const tables = RESTAURANT_TABLES.map((t) => ({
     tableNumber: t,
