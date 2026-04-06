@@ -415,6 +415,9 @@ export async function createJobPosition(input: {
   description?: string;
   min_hourly_rate?: number | null;
   max_hourly_rate?: number | null;
+  responsibilities?: string[];
+  required_skills?: string[];
+  reports_to_position_id?: string | null;
 }): Promise<JobPosition> {
   const restaurantId = await getUserRestaurantId();
   const supabase = await createUntypedClient();
@@ -428,6 +431,9 @@ export async function createJobPosition(input: {
       description: input.description || null,
       min_hourly_rate: input.min_hourly_rate ?? null,
       max_hourly_rate: input.max_hourly_rate ?? null,
+      responsibilities: input.responsibilities ?? [],
+      required_skills: input.required_skills ?? [],
+      reports_to_position_id: input.reports_to_position_id ?? null,
     })
     .select()
     .single();
@@ -450,6 +456,9 @@ export async function updateJobPosition(
     min_hourly_rate?: number | null;
     max_hourly_rate?: number | null;
     is_active?: boolean;
+    responsibilities?: string[];
+    required_skills?: string[];
+    reports_to_position_id?: string | null;
   }
 ): Promise<JobPosition> {
   const restaurantId = await getUserRestaurantId();
@@ -469,6 +478,12 @@ export async function updateJobPosition(
   if (input.max_hourly_rate !== undefined)
     updateData.max_hourly_rate = input.max_hourly_rate;
   if (input.is_active !== undefined) updateData.is_active = input.is_active;
+  if (input.responsibilities !== undefined)
+    updateData.responsibilities = input.responsibilities;
+  if (input.required_skills !== undefined)
+    updateData.required_skills = input.required_skills;
+  if (input.reports_to_position_id !== undefined)
+    updateData.reports_to_position_id = input.reports_to_position_id;
 
   const { data, error } = await supabase
     .from("job_positions")
@@ -1326,4 +1341,73 @@ export async function getTodayShifts(): Promise<Shift[]> {
   }
 
   return (data ?? []) as unknown as Shift[];
+}
+
+// ---------------------------------------------------------------------------
+// Schedule Templates — Mutations
+// ---------------------------------------------------------------------------
+
+export async function setDefaultTemplate(templateId: string): Promise<void> {
+  const restaurantId = await getUserRestaurantId();
+  const supabase = await createUntypedClient();
+
+  // Unset all existing defaults for this restaurant
+  const { error: unsetError } = await supabase
+    .from("schedule_templates")
+    .update({ is_default: false })
+    .eq("restaurant_id", restaurantId);
+
+  if (unsetError) {
+    throw new Error(
+      `Erreur lors de la mise a jour des modeles : ${unsetError.message}`
+    );
+  }
+
+  // Set the new default
+  const { error } = await supabase
+    .from("schedule_templates")
+    .update({ is_default: true })
+    .eq("id", templateId)
+    .eq("restaurant_id", restaurantId);
+
+  if (error) {
+    throw new Error(
+      `Erreur lors de la definition du modele par defaut : ${error.message}`
+    );
+  }
+}
+
+export async function deleteScheduleTemplate(templateId: string): Promise<void> {
+  const restaurantId = await getUserRestaurantId();
+  const supabase = await createUntypedClient();
+
+  // Verify ownership
+  const { data: template, error: checkError } = await supabase
+    .from("schedule_templates")
+    .select("id")
+    .eq("id", templateId)
+    .eq("restaurant_id", restaurantId)
+    .single();
+
+  if (checkError || !template) {
+    throw new Error("Modele introuvable ou acces refuse.");
+  }
+
+  // Delete template shifts first (cascade may not be set)
+  await supabase
+    .from("template_shifts")
+    .delete()
+    .eq("template_id", templateId);
+
+  const { error } = await supabase
+    .from("schedule_templates")
+    .delete()
+    .eq("id", templateId)
+    .eq("restaurant_id", restaurantId);
+
+  if (error) {
+    throw new Error(
+      `Erreur lors de la suppression du modele : ${error.message}`
+    );
+  }
 }
