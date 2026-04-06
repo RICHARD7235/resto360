@@ -56,7 +56,6 @@ export interface TimeEntryFilters {
   staffMemberId?: string;
   dateFrom?: string;
   dateTo?: string;
-  isValidated?: boolean;
 }
 
 export interface StaffDocumentFilters {
@@ -521,18 +520,11 @@ export async function createScheduleWeek(
   const restaurantId = await getUserRestaurantId();
   const supabase = await createUntypedClient();
 
-  // Compute week_end (Sunday = weekStart + 6 days)
-  const start = new Date(weekStart);
-  const end = new Date(start);
-  end.setDate(start.getDate() + 6);
-  const weekEnd = end.toISOString().split("T")[0];
-
   const { data, error } = await supabase
     .from("schedule_weeks")
     .insert({
       restaurant_id: restaurantId,
       week_start: weekStart,
-      week_end: weekEnd,
       status: "draft",
     })
     .select()
@@ -555,7 +547,6 @@ export async function publishScheduleWeek(id: string): Promise<void> {
     .from("schedule_weeks")
     .update({
       status: "published",
-      published_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)
@@ -575,15 +566,13 @@ export async function publishScheduleWeek(id: string): Promise<void> {
 export async function getShiftsForWeek(
   scheduleWeekId: string
 ): Promise<Shift[]> {
-  const restaurantId = await getUserRestaurantId();
   const supabase = await createUntypedClient();
 
   const { data, error } = await supabase
     .from("shifts")
     .select("*")
-    .eq("restaurant_id", restaurantId)
     .eq("schedule_week_id", scheduleWeekId)
-    .order("shift_date", { ascending: true })
+    .order("date", { ascending: true })
     .order("start_time", { ascending: true });
 
   if (error) {
@@ -599,21 +588,19 @@ export async function createShift(
   scheduleWeekId: string,
   data: ShiftFormData
 ): Promise<Shift> {
-  const restaurantId = await getUserRestaurantId();
   const supabase = await createUntypedClient();
 
   const { data: shift, error } = await supabase
     .from("shifts")
     .insert({
-      restaurant_id: restaurantId,
       schedule_week_id: scheduleWeekId,
       staff_member_id: data.staff_member_id,
-      shift_date: data.shift_date,
-      start_time: data.start_time || null,
-      end_time: data.end_time || null,
-      break_duration: data.break_duration,
+      date: data.date,
+      period: data.period,
+      start_time: data.start_time,
+      end_time: data.end_time,
+      break_minutes: data.break_minutes,
       shift_type: data.shift_type,
-      period: data.period || null,
       notes: data.notes || null,
     })
     .select()
@@ -632,31 +619,25 @@ export async function updateShift(
   id: string,
   data: Partial<ShiftFormData>
 ): Promise<Shift> {
-  const restaurantId = await getUserRestaurantId();
   const supabase = await createUntypedClient();
 
-  const updateData: Record<string, unknown> = {
-    updated_at: new Date().toISOString(),
-  };
+  const updateData: Record<string, unknown> = {};
 
   if (data.staff_member_id !== undefined)
     updateData.staff_member_id = data.staff_member_id;
-  if (data.shift_date !== undefined) updateData.shift_date = data.shift_date;
-  if (data.start_time !== undefined)
-    updateData.start_time = data.start_time || null;
-  if (data.end_time !== undefined)
-    updateData.end_time = data.end_time || null;
-  if (data.break_duration !== undefined)
-    updateData.break_duration = data.break_duration;
+  if (data.date !== undefined) updateData.date = data.date;
+  if (data.period !== undefined) updateData.period = data.period;
+  if (data.start_time !== undefined) updateData.start_time = data.start_time;
+  if (data.end_time !== undefined) updateData.end_time = data.end_time;
+  if (data.break_minutes !== undefined)
+    updateData.break_minutes = data.break_minutes;
   if (data.shift_type !== undefined) updateData.shift_type = data.shift_type;
-  if (data.period !== undefined) updateData.period = data.period || null;
   if (data.notes !== undefined) updateData.notes = data.notes || null;
 
   const { data: shift, error } = await supabase
     .from("shifts")
     .update(updateData)
     .eq("id", id)
-    .eq("restaurant_id", restaurantId)
     .select()
     .single();
 
@@ -670,14 +651,12 @@ export async function updateShift(
 }
 
 export async function deleteShift(id: string): Promise<void> {
-  const restaurantId = await getUserRestaurantId();
   const supabase = await createUntypedClient();
 
   const { error } = await supabase
     .from("shifts")
     .delete()
-    .eq("id", id)
-    .eq("restaurant_id", restaurantId);
+    .eq("id", id);
 
   if (error) {
     throw new Error(
@@ -698,7 +677,6 @@ export async function getScheduleTemplates(): Promise<ScheduleTemplate[]> {
     .from("schedule_templates")
     .select("*")
     .eq("restaurant_id", restaurantId)
-    .eq("is_active", true)
     .order("name", { ascending: true });
 
   if (error) {
@@ -761,8 +739,7 @@ export async function applyTemplate(
   const { error: deleteError } = await supabase
     .from("shifts")
     .delete()
-    .eq("schedule_week_id", week.id)
-    .eq("restaurant_id", restaurantId);
+    .eq("schedule_week_id", week.id);
 
   if (deleteError) {
     throw new Error(
@@ -777,49 +754,25 @@ export async function applyTemplate(
     return week;
   }
 
-  // 4. Get active staff members for the restaurant
-  const { data: staffMembers } = await supabase
-    .from("staff_members")
-    .select("id, department")
-    .eq("restaurant_id", restaurantId)
-    .eq("is_active", true);
-
-  const staff = (staffMembers ?? []) as unknown as Array<{
-    id: string;
-    department: string | null;
-  }>;
-
-  // 5. Convert template_shifts to shifts
+  // 4. Convert template_shifts to shifts (day_of_week: 1=Mon, 7=Sun)
   const weekStartDate = new Date(weekStart);
   const newShifts: Array<Record<string, unknown>> = [];
 
   for (const ts of templateShifts) {
-    // Calculate the actual date for this day_of_week (0 = Monday, 6 = Sunday)
     const shiftDate = new Date(weekStartDate);
-    shiftDate.setDate(weekStartDate.getDate() + ts.day_of_week);
+    shiftDate.setDate(weekStartDate.getDate() + (ts.day_of_week - 1));
     const shiftDateStr = shiftDate.toISOString().split("T")[0];
 
-    // Find matching staff by department
-    const matchingStaff = ts.department
-      ? staff.filter((s) => s.department === ts.department)
-      : staff;
-
-    const count = ts.required_count ?? 1;
-    const assignees = matchingStaff.slice(0, count);
-
-    for (const assignee of assignees) {
-      newShifts.push({
-        restaurant_id: restaurantId,
-        schedule_week_id: week.id,
-        staff_member_id: assignee.id,
-        shift_date: shiftDateStr,
-        start_time: ts.start_time,
-        end_time: ts.end_time,
-        break_duration: ts.break_duration,
-        shift_type: "work",
-        period: ts.period || null,
-      });
-    }
+    newShifts.push({
+      schedule_week_id: week.id,
+      staff_member_id: ts.staff_member_id,
+      date: shiftDateStr,
+      period: ts.period,
+      start_time: ts.start_time,
+      end_time: ts.end_time,
+      break_minutes: ts.break_minutes,
+      shift_type: "work",
+    });
   }
 
   if (newShifts.length > 0) {
@@ -847,10 +800,20 @@ export async function getLeaveBalances(
   const restaurantId = await getUserRestaurantId();
   const supabase = await createUntypedClient();
 
+  // leave_balances has no restaurant_id — filter via staff_members
+  const { data: staffIds } = await supabase
+    .from("staff_members")
+    .select("id")
+    .eq("restaurant_id", restaurantId)
+    .eq("is_active", true);
+
+  const ids = ((staffIds ?? []) as Array<{ id: string }>).map((s) => s.id);
+  if (ids.length === 0) return [];
+
   let query = supabase
     .from("leave_balances")
     .select("*")
-    .eq("restaurant_id", restaurantId);
+    .in("staff_member_id", ids);
 
   if (year) {
     query = query.eq("year", year);
@@ -877,10 +840,19 @@ export async function getLeaveRequests(
   const restaurantId = await getUserRestaurantId();
   const supabase = await createUntypedClient();
 
+  // leave_requests has no restaurant_id — filter via staff_members
+  const { data: staffIds } = await supabase
+    .from("staff_members")
+    .select("id")
+    .eq("restaurant_id", restaurantId);
+
+  const ids = ((staffIds ?? []) as Array<{ id: string }>).map((s) => s.id);
+  if (ids.length === 0) return [];
+
   let query = supabase
     .from("leave_requests")
     .select("*")
-    .eq("restaurant_id", restaurantId)
+    .in("staff_member_id", ids)
     .order("created_at", { ascending: false });
 
   if (filters.staffMemberId) {
@@ -921,12 +893,10 @@ export async function createLeaveRequest(
   const { data: request, error } = await supabase
     .from("leave_requests")
     .insert({
-      restaurant_id: restaurantId,
       staff_member_id: data.staff_member_id,
-      leave_type: data.leave_type || null,
+      leave_type: data.leave_type,
       start_date: data.start_date,
       end_date: data.end_date,
-      duration_days: durationDays,
       status: "pending",
       reason: data.reason || null,
     })
@@ -955,11 +925,9 @@ export async function approveLeaveRequest(id: string): Promise<void> {
     .update({
       status: "approved",
       approved_by: user?.id ?? null,
-      approved_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
-    .eq("id", id)
-    .eq("restaurant_id", restaurantId);
+    .eq("id", id);
 
   if (error) {
     throw new Error(
@@ -969,7 +937,6 @@ export async function approveLeaveRequest(id: string): Promise<void> {
 }
 
 export async function rejectLeaveRequest(id: string): Promise<void> {
-  const restaurantId = await getUserRestaurantId();
   const supabase = await createUntypedClient();
 
   const { error } = await supabase
@@ -978,8 +945,7 @@ export async function rejectLeaveRequest(id: string): Promise<void> {
       status: "rejected",
       updated_at: new Date().toISOString(),
     })
-    .eq("id", id)
-    .eq("restaurant_id", restaurantId);
+    .eq("id", id);
 
   if (error) {
     throw new Error(
@@ -1002,22 +968,18 @@ export async function getTimeEntries(
     .from("time_entries")
     .select("*")
     .eq("restaurant_id", restaurantId)
-    .order("entry_date", { ascending: false });
+    .order("date", { ascending: false });
 
   if (filters.staffMemberId) {
     query = query.eq("staff_member_id", filters.staffMemberId);
   }
 
   if (filters.dateFrom) {
-    query = query.gte("entry_date", filters.dateFrom);
+    query = query.gte("date", filters.dateFrom);
   }
 
   if (filters.dateTo) {
-    query = query.lte("entry_date", filters.dateTo);
-  }
-
-  if (filters.isValidated !== undefined) {
-    query = query.eq("is_validated", filters.isValidated);
+    query = query.lte("date", filters.dateTo);
   }
 
   const { data, error } = await query;
@@ -1037,29 +999,18 @@ export async function createTimeEntry(
   const restaurantId = await getUserRestaurantId();
   const supabase = await createUntypedClient();
 
-  // Calculate worked_minutes if clock_in and clock_out provided
-  let workedMinutes: number | null = null;
-  if (data.clock_in && data.clock_out) {
-    const [inH, inM] = data.clock_in.split(":").map(Number);
-    const [outH, outM] = data.clock_out.split(":").map(Number);
-    const totalIn = inH * 60 + inM;
-    const totalOut = outH * 60 + outM;
-    workedMinutes = totalOut - totalIn - (data.break_duration ?? 0);
-    if (workedMinutes < 0) workedMinutes = 0;
-  }
-
   const { data: entry, error } = await supabase
     .from("time_entries")
     .insert({
       restaurant_id: restaurantId,
       staff_member_id: data.staff_member_id,
-      entry_date: data.entry_date,
+      date: data.date,
+      period: data.period,
       clock_in: data.clock_in || null,
       clock_out: data.clock_out || null,
-      break_duration: data.break_duration,
-      worked_minutes: workedMinutes,
+      break_minutes: data.break_minutes,
+      is_manual: true,
       notes: data.notes || null,
-      is_validated: false,
     })
     .select()
     .single();
@@ -1080,52 +1031,19 @@ export async function updateTimeEntry(
   const restaurantId = await getUserRestaurantId();
   const supabase = await createUntypedClient();
 
-  const updateData: Record<string, unknown> = {
-    updated_at: new Date().toISOString(),
-  };
+  const updateData: Record<string, unknown> = {};
 
   if (data.staff_member_id !== undefined)
     updateData.staff_member_id = data.staff_member_id;
-  if (data.entry_date !== undefined) updateData.entry_date = data.entry_date;
+  if (data.date !== undefined) updateData.date = data.date;
+  if (data.period !== undefined) updateData.period = data.period;
   if (data.clock_in !== undefined)
     updateData.clock_in = data.clock_in || null;
   if (data.clock_out !== undefined)
     updateData.clock_out = data.clock_out || null;
-  if (data.break_duration !== undefined)
-    updateData.break_duration = data.break_duration;
+  if (data.break_minutes !== undefined)
+    updateData.break_minutes = data.break_minutes;
   if (data.notes !== undefined) updateData.notes = data.notes || null;
-
-  // Recalculate worked_minutes if times changed
-  if (data.clock_in !== undefined || data.clock_out !== undefined) {
-    // Fetch current values to calculate
-    const { data: current } = await supabase
-      .from("time_entries")
-      .select("clock_in, clock_out, break_duration")
-      .eq("id", id)
-      .single();
-
-    const clockIn =
-      data.clock_in !== undefined
-        ? data.clock_in
-        : (current as { clock_in: string | null } | null)?.clock_in;
-    const clockOut =
-      data.clock_out !== undefined
-        ? data.clock_out
-        : (current as { clock_out: string | null } | null)?.clock_out;
-    const breakDur =
-      data.break_duration !== undefined
-        ? data.break_duration
-        : (current as { break_duration: number | null } | null)
-            ?.break_duration;
-
-    if (clockIn && clockOut) {
-      const [inH, inM] = clockIn.split(":").map(Number);
-      const [outH, outM] = clockOut.split(":").map(Number);
-      let worked = outH * 60 + outM - (inH * 60 + inM) - (breakDur ?? 0);
-      if (worked < 0) worked = 0;
-      updateData.worked_minutes = worked;
-    }
-  }
 
   const { data: entry, error } = await supabase
     .from("time_entries")
@@ -1155,10 +1073,7 @@ export async function validateTimeEntry(id: string): Promise<void> {
   const { error } = await supabase
     .from("time_entries")
     .update({
-      is_validated: true,
       validated_by: user?.id ?? null,
-      validated_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
     })
     .eq("id", id)
     .eq("restaurant_id", restaurantId);
@@ -1184,7 +1099,7 @@ export async function getPayrollAdvances(
     .from("payroll_advances")
     .select("*")
     .eq("restaurant_id", restaurantId)
-    .order("payment_date", { ascending: false });
+    .order("date", { ascending: false });
 
   if (staffMemberId) {
     query = query.eq("staff_member_id", staffMemberId);
@@ -1212,11 +1127,10 @@ export async function createPayrollAdvance(
     .insert({
       restaurant_id: restaurantId,
       staff_member_id: data.staff_member_id,
+      date: data.date,
       amount: data.amount,
-      payment_date: data.payment_date,
-      payment_method: data.payment_method || null,
-      reason: data.reason || null,
-      is_repaid: false,
+      payment_method: data.payment_method,
+      notes: data.notes || null,
     })
     .select()
     .single();
@@ -1251,7 +1165,7 @@ export async function getStaffDocuments(
   }
 
   if (filters.documentType) {
-    query = query.eq("document_type", filters.documentType);
+    query = query.eq("type", filters.documentType);
   }
 
   const { data, error } = await query;
@@ -1266,8 +1180,7 @@ export async function getStaffDocuments(
 }
 
 export async function createStaffDocument(
-  data: StaffDocumentFormData,
-  fileUrl: string
+  data: StaffDocumentFormData
 ): Promise<StaffDocument> {
   const restaurantId = await getUserRestaurantId();
   const supabase = await createUntypedClient();
@@ -1277,12 +1190,11 @@ export async function createStaffDocument(
     .insert({
       restaurant_id: restaurantId,
       staff_member_id: data.staff_member_id,
-      document_type: data.document_type || null,
-      title: data.title,
-      file_url: fileUrl,
+      type: data.type,
+      name: data.name,
+      file_url: data.file_url,
+      date: data.date || null,
       expiry_date: data.expiry_date || null,
-      notes: data.notes || null,
-      is_verified: false,
     })
     .select()
     .single();
@@ -1323,6 +1235,24 @@ export async function getPersonnelDashboard(): Promise<PersonnelDashboard> {
 
   const today = new Date().toISOString().split("T")[0];
 
+  // Get schedule_week ids for this restaurant to query shifts
+  const { data: weekIds } = await supabase
+    .from("schedule_weeks")
+    .select("id")
+    .eq("restaurant_id", restaurantId);
+  const swIds = ((weekIds ?? []) as Array<{ id: string }>).map((w) => w.id);
+
+  // Get staff ids for leave queries
+  const { data: staffIds } = await supabase
+    .from("staff_members")
+    .select("id")
+    .eq("restaurant_id", restaurantId);
+  const smIds = ((staffIds ?? []) as Array<{ id: string }>).map((s) => s.id);
+
+  const in30Days = new Date();
+  in30Days.setDate(in30Days.getDate() + 30);
+  const in30DaysStr = in30Days.toISOString().split("T")[0];
+
   // All counts in parallel
   const [activeStaffRes, pendingLeaveRes, todayShiftsRes, expiringDocsRes] =
     await Promise.all([
@@ -1333,33 +1263,31 @@ export async function getPersonnelDashboard(): Promise<PersonnelDashboard> {
         .eq("restaurant_id", restaurantId)
         .eq("is_active", true),
 
-      // Pending leave requests
-      supabase
-        .from("leave_requests")
-        .select("*", { count: "exact", head: true })
-        .eq("restaurant_id", restaurantId)
-        .eq("status", "pending"),
+      // Pending leave requests (via staff_member_id)
+      smIds.length > 0
+        ? supabase
+            .from("leave_requests")
+            .select("*", { count: "exact", head: true })
+            .in("staff_member_id", smIds)
+            .eq("status", "pending")
+        : Promise.resolve({ count: 0 }),
 
-      // Today's shifts
-      supabase
-        .from("shifts")
-        .select("*", { count: "exact", head: true })
-        .eq("restaurant_id", restaurantId)
-        .eq("shift_date", today),
+      // Today's shifts (via schedule_week_id)
+      swIds.length > 0
+        ? supabase
+            .from("shifts")
+            .select("*", { count: "exact", head: true })
+            .in("schedule_week_id", swIds)
+            .eq("date", today)
+        : Promise.resolve({ count: 0 }),
 
       // Documents expiring within 30 days
-      (() => {
-        const in30Days = new Date();
-        in30Days.setDate(in30Days.getDate() + 30);
-        const in30DaysStr = in30Days.toISOString().split("T")[0];
-
-        return supabase
-          .from("staff_documents")
-          .select("*", { count: "exact", head: true })
-          .eq("restaurant_id", restaurantId)
-          .lte("expiry_date", in30DaysStr)
-          .gte("expiry_date", today);
-      })(),
+      supabase
+        .from("staff_documents")
+        .select("*", { count: "exact", head: true })
+        .eq("restaurant_id", restaurantId)
+        .lte("expiry_date", in30DaysStr)
+        .gte("expiry_date", today),
     ]);
 
   return {
@@ -1376,11 +1304,19 @@ export async function getTodayShifts(): Promise<Shift[]> {
 
   const today = new Date().toISOString().split("T")[0];
 
+  // shifts have no restaurant_id — find via schedule_weeks
+  const { data: weekIds } = await supabase
+    .from("schedule_weeks")
+    .select("id")
+    .eq("restaurant_id", restaurantId);
+  const swIds = ((weekIds ?? []) as Array<{ id: string }>).map((w) => w.id);
+  if (swIds.length === 0) return [];
+
   const { data, error } = await supabase
     .from("shifts")
     .select("*")
-    .eq("restaurant_id", restaurantId)
-    .eq("shift_date", today)
+    .in("schedule_week_id", swIds)
+    .eq("date", today)
     .order("start_time", { ascending: true });
 
   if (error) {

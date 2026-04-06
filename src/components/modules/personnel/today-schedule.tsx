@@ -70,7 +70,7 @@ export function TodaySchedule({ shifts, staffMembers }: TodayScheduleProps) {
               const label = DEPARTMENT_LABELS[dept as Department] ?? dept;
               const byPeriod = groupByPeriod(deptShifts);
               const sortedPeriods = [...byPeriod.entries()].sort(([a], [b]) => {
-                const order = ["matin", "midi", "soir", "nuit", "journee"];
+                const order = ["midi", "soir", "journee"];
                 return order.indexOf(a) - order.indexOf(b);
               });
 

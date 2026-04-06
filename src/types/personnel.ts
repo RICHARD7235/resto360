@@ -32,11 +32,10 @@ export interface JobPosition {
   id: string;
   restaurant_id: string;
   title: string;
-  department: string | null;
-  description: string | null;
-  min_hourly_rate: number | null;
-  max_hourly_rate: number | null;
-  is_active: boolean | null;
+  department: string;
+  responsibilities: string[];
+  required_skills: string[];
+  reports_to_position_id: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -45,37 +44,33 @@ export interface ScheduleWeek {
   id: string;
   restaurant_id: string;
   week_start: string;
-  week_end: string;
-  status: string | null;
-  notes: string | null;
+  status: string;
   created_by: string | null;
-  published_at: string | null;
+  notes: string | null;
+  template_id: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
 
 export interface Shift {
   id: string;
-  restaurant_id: string;
-  schedule_week_id: string | null;
+  schedule_week_id: string;
   staff_member_id: string;
-  shift_date: string;
-  start_time: string | null;
-  end_time: string | null;
-  break_duration: number | null;
+  date: string;
+  period: string;
+  start_time: string;
+  end_time: string;
+  break_minutes: number;
   shift_type: string;
-  period: string | null;
   notes: string | null;
   created_at: string | null;
-  updated_at: string | null;
 }
 
 export interface ScheduleTemplate {
   id: string;
   restaurant_id: string;
   name: string;
-  description: string | null;
-  is_active: boolean | null;
+  is_default: boolean;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -83,92 +78,75 @@ export interface ScheduleTemplate {
 export interface TemplateShift {
   id: string;
   template_id: string;
+  staff_member_id: string;
   day_of_week: number;
+  period: string;
   start_time: string;
   end_time: string;
-  break_duration: number | null;
-  period: string | null;
-  department: string | null;
-  required_count: number | null;
-  created_at: string | null;
+  break_minutes: number;
 }
 
 export interface LeaveBalance {
   id: string;
-  restaurant_id: string;
   staff_member_id: string;
   year: number;
   leave_type: string;
-  total_days: number | null;
-  used_days: number | null;
-  pending_days: number | null;
+  acquired_days: number;
+  taken_days: number;
+  carried_over: number;
   created_at: string | null;
   updated_at: string | null;
 }
 
 export interface LeaveRequest {
   id: string;
-  restaurant_id: string;
   staff_member_id: string;
   leave_type: string;
   start_date: string;
   end_date: string;
-  duration_days: number | null;
-  status: string | null;
-  reason: string | null;
+  status: string;
   approved_by: string | null;
-  approved_at: string | null;
-  rejection_reason: string | null;
+  reason: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
 
 export interface TimeEntry {
   id: string;
-  restaurant_id: string;
   staff_member_id: string;
-  shift_id: string | null;
-  entry_date: string;
+  restaurant_id: string;
+  date: string;
   clock_in: string | null;
   clock_out: string | null;
-  break_duration: number | null;
-  worked_minutes: number | null;
-  is_validated: boolean | null;
+  break_minutes: number;
+  period: string;
+  is_manual: boolean;
   validated_by: string | null;
-  validated_at: string | null;
   notes: string | null;
   created_at: string | null;
-  updated_at: string | null;
 }
 
 export interface PayrollAdvance {
   id: string;
-  restaurant_id: string;
   staff_member_id: string;
+  restaurant_id: string;
+  date: string;
   amount: number;
-  payment_date: string;
-  payment_method: string | null;
-  reason: string | null;
-  is_repaid: boolean | null;
-  repaid_at: string | null;
+  payment_method: string;
+  notes: string | null;
   created_at: string | null;
-  updated_at: string | null;
 }
 
 export interface StaffDocument {
   id: string;
-  restaurant_id: string;
   staff_member_id: string;
-  document_type: string;
-  title: string;
-  file_url: string | null;
-  file_name: string | null;
-  file_size: number | null;
+  restaurant_id: string;
+  type: string;
+  name: string;
+  file_url: string;
+  date: string | null;
   expiry_date: string | null;
-  is_verified: boolean | null;
-  notes: string | null;
   created_at: string | null;
-  updated_at: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -182,37 +160,21 @@ export type Department =
   | "direction"
   | "communication";
 
-export type ShiftPeriod = "matin" | "midi" | "soir" | "nuit" | "journee";
+export type ShiftPeriod = "midi" | "soir" | "journee";
 
 export type ShiftType = "work" | "leave" | "sick" | "training" | "school";
 
-export type LeaveType =
-  | "conges_payes"
-  | "rtt"
-  | "maladie"
-  | "maternite"
-  | "paternite"
-  | "sans_solde"
-  | "formation"
-  | "autre";
+export type LeaveType = "cp" | "maladie" | "formation" | "cours" | "sans_solde";
 
 export type LeaveRequestStatus = "pending" | "approved" | "rejected";
 
-export type ScheduleStatus = "draft" | "published" | "archived";
+export type ScheduleStatus = "draft" | "published";
 
 export type ContractType = "cdi" | "cdd" | "temps_partiel" | "apprenti" | "stage" | "extra";
 
-export type DocumentType =
-  | "contrat"
-  | "avenant"
-  | "bulletin_salaire"
-  | "carte_identite"
-  | "titre_sejour"
-  | "diplome"
-  | "certificat_medical"
-  | "autre";
+export type DocumentType = "contrat" | "fiche_paie" | "attestation" | "autre";
 
-export type PaymentMethod = "virement" | "cheque" | "especes";
+export type PaymentMethod = "virement" | "especes";
 
 // ---------------------------------------------------------------------------
 // Display maps
@@ -251,21 +213,16 @@ export const SHIFT_TYPE_COLORS: Record<ShiftType, string> = {
 };
 
 export const LEAVE_TYPE_LABELS: Record<LeaveType, string> = {
-  conges_payes: "Congés payés",
-  rtt: "RTT",
+  cp: "Congés payés",
   maladie: "Maladie",
-  maternite: "Maternité",
-  paternite: "Paternité",
-  sans_solde: "Sans solde",
   formation: "Formation",
-  autre: "Autre",
+  cours: "Cours (apprenti)",
+  sans_solde: "Sans solde",
 };
 
 export const PERIOD_LABELS: Record<ShiftPeriod, string> = {
-  matin: "Matin",
   midi: "Midi",
   soir: "Soir",
-  nuit: "Nuit",
   journee: "Journée",
 };
 
@@ -305,12 +262,12 @@ export interface StaffFormData {
 
 export interface ShiftFormData {
   staff_member_id: string;
-  shift_date: string;
+  date: string;
+  period: ShiftPeriod;
   start_time: string;
   end_time: string;
-  break_duration: number | null;
+  break_minutes: number;
   shift_type: ShiftType;
-  period: ShiftPeriod | "";
   notes: string;
 }
 
@@ -324,25 +281,27 @@ export interface LeaveRequestFormData {
 
 export interface TimeEntryFormData {
   staff_member_id: string;
-  entry_date: string;
+  date: string;
+  period: ShiftPeriod;
   clock_in: string;
   clock_out: string;
-  break_duration: number | null;
+  break_minutes: number;
   notes: string;
 }
 
 export interface PayrollAdvanceFormData {
   staff_member_id: string;
+  date: string;
   amount: number;
-  payment_date: string;
-  payment_method: PaymentMethod | "";
-  reason: string;
+  payment_method: PaymentMethod;
+  notes: string;
 }
 
 export interface StaffDocumentFormData {
   staff_member_id: string;
-  document_type: DocumentType | "";
-  title: string;
+  type: DocumentType;
+  name: string;
+  file_url: string;
+  date: string;
   expiry_date: string;
-  notes: string;
 }
