@@ -304,8 +304,7 @@ BEGIN
   SELECT id INTO v_pascal
   FROM staff_members
   WHERE restaurant_id = v_restaurant_id
-    AND first_name = 'Pascal'
-    AND last_name = 'GIRAULT'
+    AND full_name = 'Pascal GIRAULT'
   LIMIT 1;
 
   IF v_pascal IS NOT NULL THEN
@@ -316,117 +315,117 @@ BEGIN
     WHERE id = v_pascal;
   ELSE
     v_pascal := gen_random_uuid();
-    INSERT INTO staff_members (id, restaurant_id, first_name, last_name, role, department, start_date, is_active)
-    VALUES (v_pascal, v_restaurant_id, 'Pascal', 'GIRAULT', 'manager', 'direction', '2015-01-02', true);
+    INSERT INTO staff_members (id, restaurant_id, full_name, role, department, start_date, is_active)
+    VALUES (v_pascal, v_restaurant_id, 'Pascal GIRAULT', 'manager', 'direction', '2015-01-02', true);
   END IF;
 
   -- Louise Lambert
   v_louise := gen_random_uuid();
   INSERT INTO staff_members (
-    id, restaurant_id, first_name, last_name, role, department,
+    id, restaurant_id, full_name, role, department,
     job_position_id, manager_id, contract_hours, start_date, is_active
   ) VALUES (
-    v_louise, v_restaurant_id, 'Louise', 'Lambert', 'manager', 'direction',
+    v_louise, v_restaurant_id, 'Louise Lambert', 'manager', 'direction',
     v_pos_adjointe, v_pascal, 35, '2022-10-15', true
   );
 
   -- Laura Bouchet
   v_laura := gen_random_uuid();
   INSERT INTO staff_members (
-    id, restaurant_id, first_name, last_name, role, department,
+    id, restaurant_id, full_name, role, department,
     job_position_id, manager_id, contract_hours, start_date, is_active
   ) VALUES (
-    v_laura, v_restaurant_id, 'Laura', 'Bouchet', 'server', 'salle',
+    v_laura, v_restaurant_id, 'Laura Bouchet', 'server', 'salle',
     v_pos_resp_salle, v_louise, 35, '2024-02-01', true
   );
 
   -- Manon Guiguen
   v_manon := gen_random_uuid();
   INSERT INTO staff_members (
-    id, restaurant_id, first_name, last_name, role, department,
+    id, restaurant_id, full_name, role, department,
     job_position_id, manager_id, contract_hours, start_date, is_active
   ) VALUES (
-    v_manon, v_restaurant_id, 'Manon', 'Guiguen', 'server', 'salle',
+    v_manon, v_restaurant_id, 'Manon Guiguen', 'server', 'salle',
     v_pos_serveur, v_laura, 35, '2023-08-09', true
   );
 
   -- Erwan Thetiot
   v_erwan := gen_random_uuid();
   INSERT INTO staff_members (
-    id, restaurant_id, first_name, last_name, role, department,
+    id, restaurant_id, full_name, role, department,
     job_position_id, manager_id, contract_hours, start_date, is_active
   ) VALUES (
-    v_erwan, v_restaurant_id, 'Erwan', 'Thetiot', 'server', 'salle',
+    v_erwan, v_restaurant_id, 'Erwan Thetiot', 'server', 'salle',
     v_pos_serveur, v_laura, 39, '2024-06-03', true
   );
 
   -- Dorian (no last name)
   v_dorian := gen_random_uuid();
   INSERT INTO staff_members (
-    id, restaurant_id, first_name, last_name, role, department,
+    id, restaurant_id, full_name, role, department,
     job_position_id, manager_id, contract_hours, start_date, is_active
   ) VALUES (
-    v_dorian, v_restaurant_id, 'Dorian', '', 'server', 'salle',
+    v_dorian, v_restaurant_id, 'Dorian', 'server', 'salle',
     v_pos_serveur, v_laura, 35, '2025-08-19', true
   );
 
   -- Jordan Panoma
   v_jordan := gen_random_uuid();
   INSERT INTO staff_members (
-    id, restaurant_id, first_name, last_name, role, department,
+    id, restaurant_id, full_name, role, department,
     job_position_id, manager_id, contract_hours, start_date, is_active
   ) VALUES (
-    v_jordan, v_restaurant_id, 'Jordan', 'Panoma', 'cook', 'cuisine',
+    v_jordan, v_restaurant_id, 'Jordan Panoma', 'cook', 'cuisine',
     v_pos_second_cuisine, v_pascal, 39, '2022-11-08', true
   );
 
   -- Tanguy Gauquelin
   v_tanguy := gen_random_uuid();
   INSERT INTO staff_members (
-    id, restaurant_id, first_name, last_name, role, department,
+    id, restaurant_id, full_name, role, department,
     job_position_id, manager_id, contract_hours, start_date, is_active
   ) VALUES (
-    v_tanguy, v_restaurant_id, 'Tanguy', 'Gauquelin', 'cook', 'cuisine',
+    v_tanguy, v_restaurant_id, 'Tanguy Gauquelin', 'cook', 'cuisine',
     v_pos_patissier, v_jordan, 39, '2024-07-04', true
   );
 
   -- Alexandre (no last name)
   v_alexandre := gen_random_uuid();
   INSERT INTO staff_members (
-    id, restaurant_id, first_name, last_name, role, department,
+    id, restaurant_id, full_name, role, department,
     job_position_id, manager_id, contract_hours, start_date, is_active
   ) VALUES (
-    v_alexandre, v_restaurant_id, 'Alexandre', '', 'cook', 'cuisine',
+    v_alexandre, v_restaurant_id, 'Alexandre', 'cook', 'cuisine',
     v_pos_chef_partie, v_jordan, 39, '2025-02-25', true
   );
 
   -- Nolan Jeudon — Apprenti salle
   v_nolan := gen_random_uuid();
   INSERT INTO staff_members (
-    id, restaurant_id, first_name, last_name, role, department,
+    id, restaurant_id, full_name, role, department,
     job_position_id, manager_id, contract_hours, start_date, is_active
   ) VALUES (
-    v_nolan, v_restaurant_id, 'Nolan', 'Jeudon', 'server', 'salle',
+    v_nolan, v_restaurant_id, 'Nolan Jeudon', 'server', 'salle',
     v_pos_apprenti_salle, v_laura, NULL, '2024-09-09', true
   );
 
   -- Tylia Veron — Apprenti salle
   v_tylia := gen_random_uuid();
   INSERT INTO staff_members (
-    id, restaurant_id, first_name, last_name, role, department,
+    id, restaurant_id, full_name, role, department,
     job_position_id, manager_id, contract_hours, start_date, is_active
   ) VALUES (
-    v_tylia, v_restaurant_id, 'Tylia', 'Veron', 'server', 'salle',
+    v_tylia, v_restaurant_id, 'Tylia Veron', 'server', 'salle',
     v_pos_apprenti_salle, v_laura, NULL, '2025-12-12', true
   );
 
   -- Gabin Yvard — Apprenti cuisine
   v_gabin := gen_random_uuid();
   INSERT INTO staff_members (
-    id, restaurant_id, first_name, last_name, role, department,
+    id, restaurant_id, full_name, role, department,
     job_position_id, manager_id, contract_hours, start_date, is_active
   ) VALUES (
-    v_gabin, v_restaurant_id, 'Gabin', 'Yvard', 'cook', 'cuisine',
+    v_gabin, v_restaurant_id, 'Gabin Yvard', 'cook', 'cuisine',
     v_pos_apprenti_cuis, v_jordan, NULL, '2024-11-22', true
   );
 
