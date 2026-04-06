@@ -16,6 +16,7 @@ import {
   Megaphone,
   BarChart3,
   FileText,
+  Settings,
 } from "lucide-react";
 import {
   Sidebar,
@@ -56,6 +57,12 @@ const modules = [
       { name: "Marketing", href: "/marketing", icon: Megaphone },
       { name: "Comptabilité", href: "/comptabilite", icon: BarChart3 },
       { name: "Documents", href: "/documents", icon: FileText },
+    ],
+  },
+  {
+    group: "Configuration",
+    items: [
+      { name: "Admin operationnelle", href: "/admin-operationnelle", icon: Settings },
     ],
   },
 ];
