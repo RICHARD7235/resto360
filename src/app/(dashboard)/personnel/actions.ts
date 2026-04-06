@@ -1369,3 +1369,25 @@ export async function getPersonnelDashboard(): Promise<PersonnelDashboard> {
     expiringDocuments: expiringDocsRes.count ?? 0,
   };
 }
+
+export async function getTodayShifts(): Promise<Shift[]> {
+  const restaurantId = await getUserRestaurantId();
+  const supabase = await createUntypedClient();
+
+  const today = new Date().toISOString().split("T")[0];
+
+  const { data, error } = await supabase
+    .from("shifts")
+    .select("*")
+    .eq("restaurant_id", restaurantId)
+    .eq("shift_date", today)
+    .order("start_time", { ascending: true });
+
+  if (error) {
+    throw new Error(
+      `Erreur lors du chargement des shifts du jour : ${error.message}`
+    );
+  }
+
+  return (data ?? []) as unknown as Shift[];
+}
