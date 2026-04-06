@@ -56,6 +56,7 @@ interface OrderItemInput {
   menu_id?: string;
   menu_name?: string;
   is_menu_header?: boolean;
+  real_menu_id?: string;
 }
 
 export interface OrderStats {
@@ -606,15 +607,16 @@ export async function createOrder(data: {
   }
 
   // Insert order items
+  // Menu headers have synthetic product_ids (not real UUIDs) — set to null
   const itemsToInsert = data.items.map((item) => ({
     order_id: order.id,
-    product_id: item.product_id,
+    product_id: item.is_menu_header ? null : item.product_id,
     product_name: item.product_name,
     quantity: item.quantity,
     unit_price: item.unit_price,
     notes: item.notes ?? null,
     status: "pending" as const,
-    menu_id: item.menu_id ?? null,
+    menu_id: item.real_menu_id ?? null,
     menu_name: item.menu_name ?? null,
   }));
 
@@ -632,13 +634,9 @@ export async function createOrder(data: {
   }
 
   // Create preparation tickets (split by station)
-  // Skip menu header items — they are for billing only, not kitchen preparation
-  const menuHeaderProductIds = new Set(
-    data.items.filter((i) => i.is_menu_header).map((i) => i.product_id)
-  );
-
+  // Skip menu header items (product_id = null) — they are for billing only
   const itemsForTickets = (orderItems ?? [])
-    .filter((item) => !item.product_id || !menuHeaderProductIds.has(item.product_id))
+    .filter((item) => item.product_id !== null)
     .map((item) => ({
       order_item_id: item.id,
       product_id: item.product_id,

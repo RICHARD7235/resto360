@@ -103,16 +103,18 @@ function NouvelleCommandeContent() {
   function handleOpenMenuSelection(menu: MenuWithItems) {
     // If menu has no items defined, add it directly as a single line
     if (menu.items.length === 0) {
+      const uniqueId = `cart-${menu.id}-${Date.now()}`;
       addMenuToCart(
         {
-          product_id: `menu-header-${menu.id}-${Date.now()}`,
+          product_id: `menu-header-${uniqueId}`,
           product_name: menu.name,
           unit_price: menu.price,
           quantity: 1,
           notes: "",
-          menu_id: menu.id,
+          menu_id: uniqueId,
           menu_name: menu.name,
           is_menu_header: true,
+          real_menu_id: menu.id,
         },
         []
       );
@@ -124,7 +126,7 @@ function NouvelleCommandeContent() {
   }
 
   function handleMenuConfirm(selection: MenuSelection) {
-    const uniqueId = `${selection.menu_id}-${Date.now()}`;
+    const uniqueId = `cart-${selection.menu_id}-${Date.now()}`;
 
     // Header line: carries the menu price
     const header = {
@@ -136,6 +138,7 @@ function NouvelleCommandeContent() {
       menu_id: uniqueId,
       menu_name: selection.menu_name,
       is_menu_header: true,
+      real_menu_id: selection.menu_id,
     };
 
     // Detail lines: individual products for kitchen (price = 0, included)
@@ -147,6 +150,7 @@ function NouvelleCommandeContent() {
       notes: "",
       menu_id: uniqueId,
       menu_name: selection.menu_name,
+      real_menu_id: selection.menu_id,
     }));
 
     addMenuToCart(header, items);
@@ -167,6 +171,7 @@ function NouvelleCommandeContent() {
           menu_id: item.menu_id,
           menu_name: item.menu_name,
           is_menu_header: item.is_menu_header,
+          real_menu_id: item.real_menu_id,
         })),
       });
       clearCart();

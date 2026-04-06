@@ -13,6 +13,7 @@ export interface CartItem {
   menu_id?: string;
   menu_name?: string;
   is_menu_header?: boolean;
+  real_menu_id?: string;
 }
 
 export interface CommandesState {
