@@ -573,6 +573,118 @@ export type Database = {
           },
         ]
       }
+      purchase_order_items: {
+        Row: {
+          catalog_item_id: string | null
+          created_at: string
+          id: string
+          purchase_order_id: string
+          quantity_ordered: number
+          quantity_received: number
+          stock_item_id: string
+          unit_price: number
+        }
+        Insert: {
+          catalog_item_id?: string | null
+          created_at?: string
+          id?: string
+          purchase_order_id: string
+          quantity_ordered: number
+          quantity_received?: number
+          stock_item_id: string
+          unit_price: number
+        }
+        Update: {
+          catalog_item_id?: string | null
+          created_at?: string
+          id?: string
+          purchase_order_id?: string
+          quantity_ordered?: number
+          quantity_received?: number
+          stock_item_id?: string
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_order_items_catalog_item_id_fkey"
+            columns: ["catalog_item_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_catalog_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_items_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_items_stock_item_id_fkey"
+            columns: ["stock_item_id"]
+            isOneToOne: false
+            referencedRelation: "stock_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_orders: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          expected_delivery_date: string | null
+          id: string
+          notes: string | null
+          order_date: string
+          restaurant_id: string
+          status: string
+          supplier_id: string
+          total_ht: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          expected_delivery_date?: string | null
+          id?: string
+          notes?: string | null
+          order_date?: string
+          restaurant_id: string
+          status?: string
+          supplier_id: string
+          total_ht?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          expected_delivery_date?: string | null
+          id?: string
+          notes?: string | null
+          order_date?: string
+          restaurant_id?: string
+          status?: string
+          supplier_id?: string
+          total_ht?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_orders_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       recipe_ingredients: {
         Row: {
           created_at: string | null
@@ -581,6 +693,7 @@ export type Database = {
           quantity: number
           recipe_id: string
           sort_order: number | null
+          stock_item_id: string | null
           supplier_id: string | null
           unit: string
           unit_cost: number
@@ -592,6 +705,7 @@ export type Database = {
           quantity?: number
           recipe_id: string
           sort_order?: number | null
+          stock_item_id?: string | null
           supplier_id?: string | null
           unit?: string
           unit_cost?: number
@@ -603,6 +717,7 @@ export type Database = {
           quantity?: number
           recipe_id?: string
           sort_order?: number | null
+          stock_item_id?: string | null
           supplier_id?: string | null
           unit?: string
           unit_cost?: number
@@ -613,6 +728,13 @@ export type Database = {
             columns: ["recipe_id"]
             isOneToOne: false
             referencedRelation: "recipes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_ingredients_stock_item_id_fkey"
+            columns: ["stock_item_id"]
+            isOneToOne: false
+            referencedRelation: "stock_items"
             referencedColumns: ["id"]
           },
           {
@@ -853,42 +975,57 @@ export type Database = {
       }
       stock_items: {
         Row: {
+          alert_threshold: number
           category: string | null
           created_at: string | null
-          current_quantity: number | null
+          current_quantity: number
           id: string
+          is_active: boolean
           last_order_date: string | null
           min_threshold: number | null
           name: string
+          optimal_quantity: number
           restaurant_id: string
           supplier_id: string | null
-          unit: string | null
+          tracking_mode: string
+          unit: string
+          unit_cost: number
           updated_at: string | null
         }
         Insert: {
+          alert_threshold?: number
           category?: string | null
           created_at?: string | null
-          current_quantity?: number | null
+          current_quantity?: number
           id?: string
+          is_active?: boolean
           last_order_date?: string | null
           min_threshold?: number | null
           name: string
+          optimal_quantity?: number
           restaurant_id: string
           supplier_id?: string | null
-          unit?: string | null
+          tracking_mode?: string
+          unit?: string
+          unit_cost?: number
           updated_at?: string | null
         }
         Update: {
+          alert_threshold?: number
           category?: string | null
           created_at?: string | null
-          current_quantity?: number | null
+          current_quantity?: number
           id?: string
+          is_active?: boolean
           last_order_date?: string | null
           min_threshold?: number | null
           name?: string
+          optimal_quantity?: number
           restaurant_id?: string
           supplier_id?: string | null
-          unit?: string | null
+          tracking_mode?: string
+          unit?: string
+          unit_cost?: number
           updated_at?: string | null
         }
         Relationships: [
@@ -908,6 +1045,109 @@ export type Database = {
           },
         ]
       }
+      stock_movements: {
+        Row: {
+          batch_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          quantity: number
+          reference_id: string | null
+          reference_type: string | null
+          stock_item_id: string
+          type: string
+          unit_cost: number | null
+        }
+        Insert: {
+          batch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          quantity: number
+          reference_id?: string | null
+          reference_type?: string | null
+          stock_item_id: string
+          type: string
+          unit_cost?: number | null
+        }
+        Update: {
+          batch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          quantity?: number
+          reference_id?: string | null
+          reference_type?: string | null
+          stock_item_id?: string
+          type?: string
+          unit_cost?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_movements_stock_item_id_fkey"
+            columns: ["stock_item_id"]
+            isOneToOne: false
+            referencedRelation: "stock_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supplier_catalog_items: {
+        Row: {
+          category: string | null
+          created_at: string
+          currency: string
+          id: string
+          is_available: boolean
+          label: string
+          last_price_update: string
+          reference: string | null
+          supplier_id: string
+          unit: string
+          unit_price: number
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          currency?: string
+          id?: string
+          is_available?: boolean
+          label: string
+          last_price_update?: string
+          reference?: string | null
+          supplier_id: string
+          unit: string
+          unit_price: number
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          currency?: string
+          id?: string
+          is_available?: boolean
+          label?: string
+          last_price_update?: string
+          reference?: string | null
+          supplier_id?: string
+          unit?: string
+          unit_price?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_catalog_items_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       suppliers: {
         Row: {
           address: string | null
@@ -916,6 +1156,7 @@ export type Database = {
           created_at: string | null
           email: string | null
           id: string
+          is_active: boolean
           name: string
           notes: string | null
           phone: string | null
@@ -929,6 +1170,7 @@ export type Database = {
           created_at?: string | null
           email?: string | null
           id?: string
+          is_active?: boolean
           name: string
           notes?: string | null
           phone?: string | null
@@ -942,6 +1184,7 @@ export type Database = {
           created_at?: string | null
           email?: string | null
           id?: string
+          is_active?: boolean
           name?: string
           notes?: string | null
           phone?: string | null
