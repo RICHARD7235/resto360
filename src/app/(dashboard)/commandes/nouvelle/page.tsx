@@ -177,7 +177,12 @@ function NouvelleCommandeContent() {
       clearCart();
       router.push("/commandes");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Erreur lors de la création de la commande";
+      console.error("handleSubmit error:", error);
+      const raw = error instanceof Error ? error.message : "";
+      // Next.js production sanitizes server action errors — show a clear message
+      const message = raw.includes("Server Components") || !raw
+        ? "Erreur lors de la création de la commande. Veuillez réessayer."
+        : raw;
       toast.error(message);
     } finally {
       setSubmitting(false);
@@ -259,7 +264,7 @@ function NouvelleCommandeContent() {
                           )}
                           {menu.items.length > 0 && (
                             <p className="text-[10px] text-muted-foreground mt-0.5">
-                              {[...new Set(menu.items.map((i) => i.label ?? i.course))].join(" · ")}
+                              {[...new Set(menu.items.map((i) => i.course))].filter(Boolean).join(" · ")}
                             </p>
                           )}
                         </div>

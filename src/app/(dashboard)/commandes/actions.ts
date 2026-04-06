@@ -601,6 +601,7 @@ export async function createOrder(data: {
     .single();
 
   if (orderError) {
+    console.error("createOrder: order insert failed", orderError);
     throw new Error(
       `Erreur lors de la création de la commande : ${orderError.message}`
     );
@@ -626,6 +627,7 @@ export async function createOrder(data: {
     .select();
 
   if (itemsError) {
+    console.error("createOrder: items insert failed", itemsError, JSON.stringify(itemsToInsert));
     // Rollback: delete the order if items insertion fails
     await supabase.from("orders").delete().eq("id", order.id);
     throw new Error(
