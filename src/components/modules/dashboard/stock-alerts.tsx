@@ -45,11 +45,11 @@ export function StockAlerts({ items }: StockAlertsProps) {
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-sm">{item.name}</span>
                       <Badge variant={severity} className="text-[10px] h-5">
-                        {item.current_quantity} {item.unit}
+                        {item.current_quantity ?? 0} {item.unit ?? ""}
                       </Badge>
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Seuil : {item.min_threshold} {item.unit} — {item.category}
+                      Seuil : {item.min_threshold ?? 0} {item.unit ?? ""} — {item.category}
                     </p>
                   </div>
                 </div>

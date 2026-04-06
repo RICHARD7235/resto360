@@ -283,7 +283,7 @@ export async function getOrderStats(date: string): Promise<OrderStats> {
   let completedOrders = 0;
 
   for (const row of rows) {
-    const status = row.status as OrderStatus;
+    const status = (row.status ?? "pending") as OrderStatus;
     revenue += row.total ?? 0;
 
     if (activeStatuses.includes(status)) {

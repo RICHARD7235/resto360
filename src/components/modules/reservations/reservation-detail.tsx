@@ -262,7 +262,7 @@ export function ReservationDetail({
               {reservation.party_size} personne{reservation.party_size > 1 ? "s" : ""}
             </InfoRow>
             <InfoRow icon={Utensils} label="Type">
-              {typeLabels[reservation.type] ?? reservation.type}
+              {typeLabels[reservation.type ?? ""] ?? reservation.type}
             </InfoRow>
             {reservation.table_number && (
               <InfoRow icon={Hash} label="Table">
@@ -296,8 +296,8 @@ export function ReservationDetail({
         {/* ---- Footer: timestamps ---- */}
         <SheetFooter>
           <div className="w-full space-y-0.5 text-xs text-muted-foreground">
-            <p>Cree le {formatTimestamp(reservation.created_at)}</p>
-            <p>Modifie le {formatTimestamp(reservation.updated_at)}</p>
+            <p>Cree le {formatTimestamp(reservation.created_at ?? new Date().toISOString())}</p>
+            <p>Modifie le {formatTimestamp(reservation.updated_at ?? new Date().toISOString())}</p>
           </div>
         </SheetFooter>
       </SheetContent>

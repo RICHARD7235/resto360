@@ -165,7 +165,7 @@ export async function getReservationStats(
   let totalCovers = 0;
 
   for (const row of data ?? []) {
-    const status = row.status as ReservationStatus;
+    const status = (row.status ?? "pending") as ReservationStatus;
     if (status in byStatus) {
       byStatus[status]++;
     }

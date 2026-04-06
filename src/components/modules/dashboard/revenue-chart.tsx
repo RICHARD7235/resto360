@@ -25,8 +25,8 @@ function formatCurrency(value: number) {
 export function RevenueChart({ weekStats }: RevenueChartProps) {
   const data = weekStats.map((stat) => ({
     date: format(parseISO(stat.date), "EEE dd", { locale: fr }),
-    revenue: stat.revenue,
-    covers: stat.covers,
+    revenue: stat.revenue ?? 0,
+    covers: stat.covers ?? 0,
   }));
 
   return (
