@@ -166,7 +166,7 @@ export function ProductForm({
           {stations && stations.length > 0 && (
             <div className="space-y-2">
               <Label htmlFor="product-station">Poste de preparation</Label>
-              <Select value={stationId || "none"} onValueChange={(v) => setStationId(v === "none" ? "" : v)}>
+              <Select value={stationId || "none"} onValueChange={(v) => setStationId(!v || v === "none" ? "" : v)}>
                 <SelectTrigger id="product-station">
                   <SelectValue placeholder="Poste de la categorie" />
                 </SelectTrigger>
