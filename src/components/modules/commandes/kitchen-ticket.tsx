@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 // Types
 // ---------------------------------------------------------------------------
 
-interface OrderItem {
+interface TicketItem {
   id: string;
   product_name: string;
   quantity: number;
@@ -26,17 +26,24 @@ interface OrderItem {
   status: string;
 }
 
+export interface TicketData {
+  id: string;
+  order_id: string;
+  station_id: string;
+  station_name: string;
+  station_color: string;
+  status: string;
+  created_at: string;
+  table_number: string | null;
+  order_notes: string | null;
+  items: TicketItem[];
+}
+
 interface KitchenTicketProps {
-  order: {
-    id: string;
-    table_number: string | null;
-    status: string;
-    created_at: string;
-    notes: string | null;
-    items: OrderItem[];
-  };
+  ticket: TicketData;
   onItemStatusChange: (itemId: string, status: string) => void;
-  onOrderStatusChange: (orderId: string, status: string) => void;
+  onTicketStatusChange: (ticketId: string, status: string) => void;
+  showStationBadge?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -44,21 +51,9 @@ interface KitchenTicketProps {
 // ---------------------------------------------------------------------------
 
 const STATUS_CONFIG = {
-  pending: {
-    bg: "bg-red-500",
-    text: "text-white",
-    label: "NOUVEAU",
-  },
-  in_progress: {
-    bg: "bg-amber-500",
-    text: "text-white",
-    label: "EN PREPA",
-  },
-  ready: {
-    bg: "bg-green-500",
-    text: "text-white",
-    label: "PRET",
-  },
+  pending: { bg: "bg-red-500", text: "text-white", label: "NOUVEAU" },
+  in_progress: { bg: "bg-amber-500", text: "text-white", label: "EN PREPA" },
+  ready: { bg: "bg-green-500", text: "text-white", label: "PRET" },
 } as const;
 
 type KnownStatus = keyof typeof STATUS_CONFIG;
@@ -68,15 +63,12 @@ function isKnownStatus(status: string): status is KnownStatus {
 }
 
 function getStatusConfig(status: string) {
-  if (isKnownStatus(status)) {
-    return STATUS_CONFIG[status];
-  }
+  if (isKnownStatus(status)) return STATUS_CONFIG[status];
   return { bg: "bg-muted", text: "text-foreground", label: status.toUpperCase() };
 }
 
 function getElapsedMinutes(createdAt: string): number {
-  const diff = Date.now() - new Date(createdAt).getTime();
-  return Math.max(0, Math.floor(diff / 60_000));
+  return Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 60_000));
 }
 
 function formatElapsed(minutes: number): string {
@@ -89,50 +81,47 @@ function formatElapsed(minutes: number): string {
 // ---------------------------------------------------------------------------
 
 export function KitchenTicket({
-  order,
+  ticket,
   onItemStatusChange,
-  onOrderStatusChange,
+  onTicketStatusChange,
+  showStationBadge = false,
 }: KitchenTicketProps) {
   const [elapsedMinutes, setElapsedMinutes] = useState(() =>
-    getElapsedMinutes(order.created_at)
+    getElapsedMinutes(ticket.created_at)
   );
 
-  // Timer: update every 30s
   useEffect(() => {
-    setElapsedMinutes(getElapsedMinutes(order.created_at));
-
+    setElapsedMinutes(getElapsedMinutes(ticket.created_at));
     const interval = setInterval(() => {
-      setElapsedMinutes(getElapsedMinutes(order.created_at));
+      setElapsedMinutes(getElapsedMinutes(ticket.created_at));
     }, 30_000);
-
     return () => clearInterval(interval);
-  }, [order.created_at]);
+  }, [ticket.created_at]);
 
-  const statusConfig = getStatusConfig(order.status);
+  const statusConfig = getStatusConfig(ticket.status);
   const isLate = elapsedMinutes > 15;
-  const allItemsDone = order.items.length > 0 && order.items.every((i) => i.status === "done");
+  const allItemsDone = ticket.items.length > 0 && ticket.items.every((i) => i.status === "done");
 
   const handleToggleItem = useCallback(
-    (item: OrderItem) => {
+    (item: TicketItem) => {
       const nextStatus = item.status === "done" ? "pending" : "done";
       onItemStatusChange(item.id, nextStatus);
     },
     [onItemStatusChange]
   );
 
-  const handleOrderAction = useCallback(() => {
-    if (order.status === "pending") {
-      onOrderStatusChange(order.id, "in_progress");
-    } else if (order.status === "in_progress" && allItemsDone) {
-      onOrderStatusChange(order.id, "ready");
-    } else if (order.status === "ready") {
-      onOrderStatusChange(order.id, "served");
+  const handleTicketAction = useCallback(() => {
+    if (ticket.status === "pending") {
+      onTicketStatusChange(ticket.id, "in_progress");
+    } else if (ticket.status === "in_progress" && allItemsDone) {
+      onTicketStatusChange(ticket.id, "ready");
+    } else if (ticket.status === "ready") {
+      onTicketStatusChange(ticket.id, "served");
     }
-  }, [order.id, order.status, allItemsDone, onOrderStatusChange]);
+  }, [ticket.id, ticket.status, allItemsDone, onTicketStatusChange]);
 
-  // Determine the primary action button
   const actionButton = (() => {
-    switch (order.status) {
+    switch (ticket.status) {
       case "pending":
         return { label: "Commencer", disabled: false };
       case "in_progress":
@@ -146,19 +135,22 @@ export function KitchenTicket({
 
   return (
     <Card className="w-full overflow-hidden">
-      {/* Header with status color */}
       <CardHeader
-        className={cn(
-          "-mt-4 rounded-t-xl px-4 py-3",
-          statusConfig.bg,
-          statusConfig.text
-        )}
+        className={cn("-mt-4 rounded-t-xl px-4 py-3", statusConfig.bg, statusConfig.text)}
       >
         <CardTitle className={cn("text-lg font-bold", statusConfig.text)}>
-          {order.table_number ? `Table ${order.table_number}` : "A emporter"}
+          {ticket.table_number ? `Table ${ticket.table_number}` : "A emporter"}
         </CardTitle>
         <CardAction>
           <div className="flex items-center gap-2">
+            {showStationBadge && (
+              <Badge
+                className="text-xs font-semibold text-white border border-white/30"
+                style={{ backgroundColor: ticket.station_color }}
+              >
+                {ticket.station_name}
+              </Badge>
+            )}
             <Badge
               variant="secondary"
               className={cn(
@@ -173,7 +165,6 @@ export function KitchenTicket({
           </div>
         </CardAction>
 
-        {/* Timer */}
         <div
           className={cn(
             "col-span-full flex items-center gap-1.5 text-sm font-medium",
@@ -185,11 +176,7 @@ export function KitchenTicket({
           ) : (
             <Clock className="size-4" />
           )}
-          <span
-            className={cn(
-              isLate && "font-bold"
-            )}
-          >
+          <span className={cn(isLate && "font-bold")}>
             {formatElapsed(elapsedMinutes)}
           </span>
           {isLate && (
@@ -200,9 +187,8 @@ export function KitchenTicket({
         </div>
       </CardHeader>
 
-      {/* Items list */}
       <CardContent className="space-y-1 py-3">
-        {order.items.map((item) => {
+        {ticket.items.map((item) => {
           const isDone = item.status === "done";
           return (
             <div
@@ -226,12 +212,7 @@ export function KitchenTicket({
                 {isDone && <Check className="size-5" />}
               </Button>
               <div className="flex-1">
-                <span
-                  className={cn(
-                    "text-base font-medium",
-                    isDone && "line-through"
-                  )}
-                >
+                <span className={cn("text-base font-medium", isDone && "line-through")}>
                   {item.quantity} &times; {item.product_name}
                 </span>
                 {item.notes && (
@@ -245,23 +226,21 @@ export function KitchenTicket({
         })}
       </CardContent>
 
-      {/* Order notes */}
-      {order.notes && (
+      {ticket.order_notes && (
         <CardContent className="border-t pt-2 pb-0">
           <p className="text-sm italic text-muted-foreground">
-            Note : {order.notes}
+            Note : {ticket.order_notes}
           </p>
         </CardContent>
       )}
 
-      {/* Action button */}
       {actionButton && (
         <CardFooter>
           <Button
             className="min-h-[44px] w-full text-base font-semibold"
             size="lg"
             disabled={actionButton.disabled}
-            onClick={handleOrderAction}
+            onClick={handleTicketAction}
           >
             {actionButton.label}
           </Button>
