@@ -3,10 +3,11 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
 import {
   Clock,
   Calendar,
+  Eye,
+  EyeOff,
   Trash2,
   UtensilsCrossed,
 } from "lucide-react";
@@ -121,12 +122,21 @@ export function MenuFormulasList({
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Switch
-                    checked={menu.is_available ?? false}
-                    onCheckedChange={(checked) =>
-                      onToggleAvailability(menu.id, checked)
+                  <Button
+                    variant={menu.is_available ? "outline" : "secondary"}
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() =>
+                      onToggleAvailability(menu.id, !menu.is_available)
                     }
-                  />
+                    title={menu.is_available ? "Désactiver" : "Activer"}
+                  >
+                    {menu.is_available ? (
+                      <Eye className="h-4 w-4" />
+                    ) : (
+                      <EyeOff className="h-4 w-4" />
+                    )}
+                  </Button>
                   <Button
                     variant="ghost"
                     size="icon"
