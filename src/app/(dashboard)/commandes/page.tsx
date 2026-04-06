@@ -43,8 +43,9 @@ function getTableStatus(
   // If table has an active order, show order status (takes priority)
   if (order) {
     const statusMap: Record<string, "occupied" | "waiting" | "ready"> = {
-      pending: "occupied",
-      in_progress: "waiting",
+      draft: "occupied",
+      sent: "occupied",
+      preparing: "waiting",
       ready: "ready",
       served: "occupied",
     };
@@ -313,7 +314,7 @@ export default function CommandesPage() {
               order={{
                 id: selectedOrder.id,
                 table_number: selectedOrder.table_number,
-                status: selectedOrder.status ?? "pending",
+                status: selectedOrder.status ?? "sent",
                 total: selectedOrder.total ?? 0,
                 notes: selectedOrder.notes,
                 created_at: selectedOrder.created_at ?? new Date().toISOString(),

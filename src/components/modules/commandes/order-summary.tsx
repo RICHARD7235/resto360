@@ -31,8 +31,9 @@ interface OrderSummaryProps {
 }
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-  pending: { label: "Nouvelle", variant: "destructive" },
-  in_progress: { label: "En prépa", variant: "default" },
+  draft: { label: "Brouillon", variant: "outline" },
+  sent: { label: "Envoyée", variant: "destructive" },
+  preparing: { label: "En prépa", variant: "default" },
   ready: { label: "Prête", variant: "secondary" },
   served: { label: "Servie", variant: "outline" },
   paid: { label: "Payée", variant: "outline" },

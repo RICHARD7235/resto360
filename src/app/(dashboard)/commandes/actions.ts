@@ -20,8 +20,9 @@ type MenuRow = Tables<"menus">;
 type MenuItemRow = Tables<"menu_items">;
 
 export type OrderStatus =
-  | "pending"
-  | "in_progress"
+  | "draft"
+  | "sent"
+  | "preparing"
   | "ready"
   | "served"
   | "paid"
@@ -209,7 +210,7 @@ export async function getActiveOrders(): Promise<OrderWithItems[]> {
     .select("*")
     .eq("restaurant_id", restaurantId)
     .gte("created_at", today)
-    .in("status", ["pending", "in_progress", "ready"])
+    .in("status", ["sent", "preparing", "ready"])
     .order("created_at", { ascending: true });
 
   if (error) {
@@ -304,7 +305,7 @@ export async function getOrderStats(date: string): Promise<OrderStats> {
 
   const rows = data ?? [];
 
-  const activeStatuses: OrderStatus[] = ["pending", "in_progress", "ready"];
+  const activeStatuses: OrderStatus[] = ["sent", "preparing", "ready"];
   const completedStatuses: OrderStatus[] = ["served", "paid"];
 
   let revenue = 0;
@@ -312,7 +313,7 @@ export async function getOrderStats(date: string): Promise<OrderStats> {
   let completedOrders = 0;
 
   for (const row of rows) {
-    const status = (row.status ?? "pending") as OrderStatus;
+    const status = (row.status ?? "draft") as OrderStatus;
     revenue += row.total ?? 0;
 
     if (activeStatuses.includes(status)) {
@@ -431,7 +432,7 @@ export async function getPreparationTickets(
     .select("id, table_number, notes")
     .eq("restaurant_id", restaurantId)
     .gte("created_at", today)
-    .in("status", ["pending", "in_progress", "ready"]);
+    .in("status", ["sent", "preparing", "ready"]);
 
   if (!orders || orders.length === 0) return [];
 
@@ -442,7 +443,7 @@ export async function getPreparationTickets(
     .from("preparation_tickets")
     .select("*")
     .in("order_id", orderIds)
-    .in("status", ["pending", "in_progress", "ready"])
+    .in("status", ["sent", "preparing", "ready"])
     .order("created_at", { ascending: true });
 
   if (stationId) {
@@ -550,9 +551,9 @@ export async function updatePreparationTicketStatus(
   } else if (statuses.every((s) => s === "ready" || s === "served")) {
     orderStatus = "ready";
   } else if (statuses.some((s) => s === "in_progress")) {
-    orderStatus = "in_progress";
+    orderStatus = "preparing";
   } else {
-    orderStatus = "pending";
+    orderStatus = "sent";
   }
 
   const { data: order } = await supabase
@@ -594,7 +595,7 @@ export async function createOrder(data: {
       restaurant_id: restaurantId,
       table_number: data.table_number,
       notes: data.notes ?? null,
-      status: "pending",
+      status: "sent",
       total,
     })
     .select()
