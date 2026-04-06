@@ -1,9 +1,9 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { Users } from "lucide-react";
+import { Clock, Users } from "lucide-react";
 
-type TableStatus = "free" | "occupied" | "waiting" | "ready";
+type TableStatus = "free" | "occupied" | "waiting" | "ready" | "reserved";
 
 interface TableCardProps {
   tableNumber: string;
@@ -14,6 +14,11 @@ interface TableCardProps {
   onClick: () => void;
   isSelected?: boolean;
   stationBadges?: { station_name: string; station_color: string; status: string }[];
+  reservationInfo?: {
+    customer_name: string;
+    party_size: number;
+    time: string;
+  };
 }
 
 const statusConfig: Record<
@@ -24,6 +29,11 @@ const statusConfig: Record<
     bg: "bg-green-50",
     border: "border-green-200",
     label: "Libre",
+  },
+  reserved: {
+    bg: "bg-purple-50",
+    border: "border-purple-200",
+    label: "Réservée",
   },
   occupied: {
     bg: "bg-blue-50",
@@ -58,6 +68,7 @@ export function TableCard({
   onClick,
   isSelected = false,
   stationBadges,
+  reservationInfo,
 }: TableCardProps) {
   const config = statusConfig[status];
 
@@ -80,7 +91,25 @@ export function TableCard({
         {config.label}
       </span>
 
-      {status !== "free" && (
+      {/* Reservation info */}
+      {status === "reserved" && reservationInfo && (
+        <div className="mt-1 flex flex-col items-center gap-0.5">
+          <span className="text-xs font-medium text-purple-700 truncate max-w-[90px]">
+            {reservationInfo.customer_name}
+          </span>
+          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Users className="size-3" />
+            {reservationInfo.party_size}
+          </span>
+          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+            <Clock className="size-3" />
+            {reservationInfo.time.slice(0, 5)}
+          </span>
+        </div>
+      )}
+
+      {/* Order info */}
+      {status !== "free" && status !== "reserved" && (
         <div className="mt-1 flex flex-col items-center gap-0.5">
           {guestCount != null && (
             <span className="flex items-center gap-1 text-xs text-muted-foreground">

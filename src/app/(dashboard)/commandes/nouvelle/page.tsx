@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState, useCallback } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ClipboardList } from "lucide-react";
 import Link from "next/link";
@@ -12,6 +12,10 @@ import { useCommandesStore } from "@/stores/commandes.store";
 import { CategoryTabs } from "@/components/modules/commandes/category-tabs";
 import { ProductGrid } from "@/components/modules/commandes/product-grid";
 import { OrderPanel } from "@/components/modules/commandes/order-panel";
+import {
+  MenuSelectionDialog,
+  type MenuSelection,
+} from "@/components/modules/commandes/menu-selection-dialog";
 import { getMenuCategories, getProducts, createOrder, getMenusForOrder } from "../actions";
 import type { MenuWithItems } from "../actions";
 import type { Tables } from "@/types/database.types";
@@ -43,7 +47,9 @@ function NouvelleCommandeContent() {
     activeCategory,
     setActiveCategory,
     addToCart,
+    addMenuToCart,
     removeFromCart,
+    removeMenuFromCart,
     updateCartQuantity,
     clearCart,
   } = useCommandesStore();
@@ -53,6 +59,10 @@ function NouvelleCommandeContent() {
   const [menus, setMenus] = useState<MenuWithItems[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  // Menu selection dialog state
+  const [selectedMenu, setSelectedMenu] = useState<MenuWithItems | null>(null);
+  const [menuDialogOpen, setMenuDialogOpen] = useState(false);
 
   // Charger les catégories et menus au montage
   useEffect(() => {
@@ -90,17 +100,56 @@ function NouvelleCommandeContent() {
     });
   }
 
-  function handleAddMenu(menu: MenuWithItems) {
-    // Add the menu as a single cart line with the menu price
-    addToCart({
-      product_id: menu.id, // use menu id as product_id for cart key
-      product_name: menu.name,
-      unit_price: menu.price,
+  function handleOpenMenuSelection(menu: MenuWithItems) {
+    // If menu has no items defined, add it directly as a single line
+    if (menu.items.length === 0) {
+      addMenuToCart(
+        {
+          product_id: `menu-header-${menu.id}-${Date.now()}`,
+          product_name: menu.name,
+          unit_price: menu.price,
+          quantity: 1,
+          notes: "",
+          menu_id: menu.id,
+          menu_name: menu.name,
+          is_menu_header: true,
+        },
+        []
+      );
+      return;
+    }
+
+    setSelectedMenu(menu);
+    setMenuDialogOpen(true);
+  }
+
+  function handleMenuConfirm(selection: MenuSelection) {
+    const uniqueId = `${selection.menu_id}-${Date.now()}`;
+
+    // Header line: carries the menu price
+    const header = {
+      product_id: `menu-header-${uniqueId}`,
+      product_name: selection.menu_name,
+      unit_price: selection.menu_price,
       quantity: 1,
       notes: "",
-      menu_id: menu.id,
-      menu_name: menu.name,
-    });
+      menu_id: uniqueId,
+      menu_name: selection.menu_name,
+      is_menu_header: true,
+    };
+
+    // Detail lines: individual products for kitchen (price = 0, included)
+    const items = selection.items.map((item) => ({
+      product_id: item.product_id,
+      product_name: item.product_name,
+      unit_price: 0,
+      quantity: 1,
+      notes: "",
+      menu_id: uniqueId,
+      menu_name: selection.menu_name,
+    }));
+
+    addMenuToCart(header, items);
   }
 
   async function handleSubmit() {
@@ -117,6 +166,7 @@ function NouvelleCommandeContent() {
           notes: item.notes || undefined,
           menu_id: item.menu_id,
           menu_name: item.menu_name,
+          is_menu_header: item.is_menu_header,
         })),
       });
       clearCart();
@@ -175,7 +225,7 @@ function NouvelleCommandeContent() {
                   <Card
                     key={menu.id}
                     className="cursor-pointer hover:border-primary/50 transition-colors"
-                    onClick={() => handleAddMenu(menu)}
+                    onClick={() => handleOpenMenuSelection(menu)}
                   >
                     <CardContent className="p-3">
                       <div className="flex items-center justify-between">
@@ -200,6 +250,11 @@ function NouvelleCommandeContent() {
                           {menu.description && (
                             <p className="text-xs text-muted-foreground truncate mt-0.5">
                               {menu.description}
+                            </p>
+                          )}
+                          {menu.items.length > 0 && (
+                            <p className="text-[10px] text-muted-foreground mt-0.5">
+                              {[...new Set(menu.items.map((i) => i.label ?? i.course))].join(" · ")}
                             </p>
                           )}
                         </div>
@@ -229,12 +284,21 @@ function NouvelleCommandeContent() {
             tableNumber={tableNumber}
             onUpdateQuantity={updateCartQuantity}
             onRemoveItem={removeFromCart}
+            onRemoveMenu={removeMenuFromCart}
             onSubmit={handleSubmit}
             onClear={clearCart}
             loading={submitting}
           />
         </div>
       </div>
+
+      {/* Menu selection dialog */}
+      <MenuSelectionDialog
+        menu={selectedMenu}
+        open={menuDialogOpen}
+        onOpenChange={setMenuDialogOpen}
+        onConfirm={handleMenuConfirm}
+      />
     </div>
   );
 }

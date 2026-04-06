@@ -55,6 +55,7 @@ interface OrderItemInput {
   notes?: string;
   menu_id?: string;
   menu_name?: string;
+  is_menu_header?: boolean;
 }
 
 export interface OrderStats {
@@ -376,6 +377,46 @@ export async function getMenusForOrder(): Promise<MenuWithItems[]> {
   }));
 }
 
+// ---------------------------------------------------------------------------
+// Reservations for floor plan
+// ---------------------------------------------------------------------------
+
+export interface FloorPlanReservation {
+  id: string;
+  customer_name: string;
+  party_size: number;
+  time: string;
+  table_number: string;
+  status: string;
+}
+
+export async function getTodayReservationsForFloorPlan(): Promise<FloorPlanReservation[]> {
+  const restaurantId = await getUserRestaurantId();
+  const supabase = await createClient();
+
+  const today = new Date().toISOString().split("T")[0];
+
+  const { data, error } = await supabase
+    .from("reservations")
+    .select("id, customer_name, party_size, time, table_number, status")
+    .eq("restaurant_id", restaurantId)
+    .eq("date", today)
+    .in("status", ["confirmed", "seated", "pending"])
+    .not("table_number", "is", null);
+
+  if (error) {
+    throw new Error(`Erreur chargement réservations: ${error.message}`);
+  }
+
+  return (data ?? []).filter(
+    (r): r is FloorPlanReservation => r.table_number !== null
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Preparation tickets
+// ---------------------------------------------------------------------------
+
 export async function getPreparationTickets(
   stationId?: string
 ): Promise<PreparationTicketWithItems[]> {
@@ -591,10 +632,17 @@ export async function createOrder(data: {
   }
 
   // Create preparation tickets (split by station)
-  const itemsForTickets = (orderItems ?? []).map((item) => ({
-    order_item_id: item.id,
-    product_id: item.product_id,
-  }));
+  // Skip menu header items — they are for billing only, not kitchen preparation
+  const menuHeaderProductIds = new Set(
+    data.items.filter((i) => i.is_menu_header).map((i) => i.product_id)
+  );
+
+  const itemsForTickets = (orderItems ?? [])
+    .filter((item) => !item.product_id || !menuHeaderProductIds.has(item.product_id))
+    .map((item) => ({
+      order_item_id: item.id,
+      product_id: item.product_id,
+    }));
 
   try {
     await createPreparationTickets(order.id, itemsForTickets, restaurantId);

@@ -17,6 +17,11 @@ interface FloorPlanTable {
   guestCount?: number;
   orderCreatedAt?: string;
   stationBadges?: StationBadge[];
+  reservationInfo?: {
+    customer_name: string;
+    party_size: number;
+    time: string;
+  };
 }
 
 interface FloorPlanProps {
@@ -27,6 +32,7 @@ interface FloorPlanProps {
 
 const legendItems: { status: TableStatus; label: string; color: string }[] = [
   { status: "free", label: "Libre", color: "bg-green-200" },
+  { status: "reserved", label: "Réservée", color: "bg-purple-200" },
   { status: "occupied", label: "Occupée", color: "bg-blue-200" },
   { status: "waiting", label: "En attente", color: "bg-amber-200" },
   { status: "ready", label: "Prête", color: "bg-orange-200" },
@@ -81,6 +87,7 @@ export function FloorPlan({
                 onClick={() => onSelectTable(table.tableNumber)}
                 isSelected={selectedTable === table.tableNumber}
                 stationBadges={table.stationBadges}
+                reservationInfo={table.reservationInfo}
               />
             ))}
           </div>

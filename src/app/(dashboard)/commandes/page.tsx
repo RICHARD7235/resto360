@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Plus, ChefHat } from "lucide-react";
+import { Plus, ChefHat, Monitor } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -13,8 +13,13 @@ import {
   getOrderStats,
   updateOrderStatus,
   getPreparationTickets,
+  getTodayReservationsForFloorPlan,
 } from "./actions";
-import type { OrderWithItems, OrderStats, PreparationTicketWithItems } from "./actions";
+import { getActiveStations } from "../admin-operationnelle/actions";
+import type { OrderWithItems, OrderStats, PreparationTicketWithItems, FloorPlanReservation } from "./actions";
+import type { Tables } from "@/types/database.types";
+
+type Station = Tables<"preparation_stations">;
 
 // ---------------------------------------------------------------------------
 // Tables de La Cabane Qui Fume (configuration statique pour le MVP)
@@ -25,35 +30,57 @@ const RESTAURANT_TABLES = [
   "T7", "T8", "T9", "T10", "T11", "T12",
 ];
 
-function getTableStatus(orders: OrderWithItems[], tableNumber: string, tickets: PreparationTicketWithItems[]) {
+function getTableStatus(
+  orders: OrderWithItems[],
+  tableNumber: string,
+  tickets: PreparationTicketWithItems[],
+  reservations: FloorPlanReservation[],
+) {
   const order = orders.find(
     (o) => o.table_number === tableNumber && !["paid", "cancelled"].includes(o.status ?? "")
   );
-  if (!order) return { status: "free" as const };
 
-  const statusMap: Record<string, "occupied" | "waiting" | "ready"> = {
-    pending: "occupied",
-    in_progress: "waiting",
-    ready: "ready",
-    served: "occupied",
-  };
+  // If table has an active order, show order status (takes priority)
+  if (order) {
+    const statusMap: Record<string, "occupied" | "waiting" | "ready"> = {
+      pending: "occupied",
+      in_progress: "waiting",
+      ready: "ready",
+      served: "occupied",
+    };
 
-  const orderTickets = tickets.filter((t) => t.order_id === order.id);
-  const stationBadges = orderTickets
-    .filter((t) => t.status !== "served")
-    .map((t) => ({
-      station_name: t.station_name,
-      station_color: t.station_color,
-      status: t.status,
-    }));
+    const orderTickets = tickets.filter((t) => t.order_id === order.id);
+    const stationBadges = orderTickets
+      .filter((t) => t.status !== "served")
+      .map((t) => ({
+        station_name: t.station_name,
+        station_color: t.station_color,
+        status: t.status,
+      }));
 
-  return {
-    status: statusMap[order.status ?? ""] ?? ("occupied" as const),
-    orderTotal: order.total ?? undefined,
-    orderCreatedAt: order.created_at ?? undefined,
-    guestCount: order.order_items.length,
-    stationBadges,
-  };
+    return {
+      status: statusMap[order.status ?? ""] ?? ("occupied" as const),
+      orderTotal: order.total ?? undefined,
+      orderCreatedAt: order.created_at ?? undefined,
+      guestCount: order.order_items.length,
+      stationBadges,
+    };
+  }
+
+  // If table has a reservation (confirmed/seated/pending), show reserved
+  const reservation = reservations.find((r) => r.table_number === tableNumber);
+  if (reservation) {
+    return {
+      status: "reserved" as const,
+      reservationInfo: {
+        customer_name: reservation.customer_name,
+        party_size: reservation.party_size,
+        time: reservation.time,
+      },
+    };
+  }
+
+  return { status: "free" as const };
 }
 
 // ---------------------------------------------------------------------------
@@ -138,6 +165,8 @@ export default function CommandesPage() {
   });
   const [loading, setLoading] = useState(true);
   const [prepTickets, setPrepTickets] = useState<PreparationTicketWithItems[]>([]);
+  const [stations, setStations] = useState<Station[]>([]);
+  const [reservations, setReservations] = useState<FloorPlanReservation[]>([]);
 
   useEffect(() => {
     if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
@@ -148,14 +177,18 @@ export default function CommandesPage() {
   const fetchData = useCallback(async () => {
     try {
       const today = new Date().toISOString().slice(0, 10);
-      const [ordersData, statsData, ticketsData] = await Promise.all([
+      const [ordersData, statsData, ticketsData, stationsData, reservationsData] = await Promise.all([
         getActiveOrders(),
         getOrderStats(today),
         getPreparationTickets(),
+        getActiveStations(),
+        getTodayReservationsForFloorPlan(),
       ]);
       setOrders(ordersData);
       setStats(statsData);
       setPrepTickets(ticketsData);
+      setStations(stationsData);
+      setReservations(reservationsData);
     } catch (error) {
       console.error("Erreur chargement commandes:", error);
     } finally {
@@ -174,7 +207,7 @@ export default function CommandesPage() {
 
   const tables = RESTAURANT_TABLES.map((t) => ({
     tableNumber: t,
-    ...getTableStatus(orders, t, prepTickets),
+    ...getTableStatus(orders, t, prepTickets, reservations),
   }));
 
   const selectedOrder = selectedTable
@@ -215,15 +248,31 @@ export default function CommandesPage() {
             Plan de salle et gestion des commandes en temps réel
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            className="min-h-11 gap-2"
-            render={<Link href="/commandes/cuisine" />}
-          >
-            <ChefHat className="h-4 w-4" />
-            Écran cuisine
-          </Button>
+        <div className="flex flex-wrap gap-2">
+          {stations.map((station) => (
+            <Button
+              key={station.id}
+              variant="outline"
+              className="min-h-11 gap-2"
+              render={<Link href={`/commandes/cuisine?station=${station.id}`} />}
+            >
+              <span
+                className="size-3 rounded-full"
+                style={{ backgroundColor: station.color ?? "#6B7280" }}
+              />
+              Écran {station.name}
+            </Button>
+          ))}
+          {stations.length > 1 && (
+            <Button
+              variant="outline"
+              className="min-h-11 gap-2"
+              render={<Link href="/commandes/cuisine" />}
+            >
+              <Monitor className="h-4 w-4" />
+              Tous les postes
+            </Button>
+          )}
           {selectedTable && (
             <Button
               className="min-h-11 gap-2"
@@ -280,8 +329,28 @@ export default function CommandesPage() {
               onStatusChange={handleStatusChange}
             />
           ) : selectedTable ? (
-            <div className="rounded-xl border bg-card p-6 text-center">
-              <p className="mb-4 text-sm text-muted-foreground">
+            <div className="rounded-xl border bg-card p-6 text-center space-y-4">
+              {/* Show reservation info if table is reserved */}
+              {(() => {
+                const tableReservation = reservations.find((r) => r.table_number === selectedTable);
+                if (tableReservation) {
+                  return (
+                    <div className="rounded-lg bg-purple-50 border border-purple-200 p-4 text-left space-y-1">
+                      <p className="text-sm font-semibold text-purple-800">
+                        Réservation
+                      </p>
+                      <p className="text-sm text-purple-700">
+                        {tableReservation.customer_name} — {tableReservation.party_size} couverts
+                      </p>
+                      <p className="text-xs text-purple-600">
+                        {tableReservation.time.slice(0, 5)}
+                      </p>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+              <p className="text-sm text-muted-foreground">
                 Aucune commande active pour cette table
               </p>
               <Button
