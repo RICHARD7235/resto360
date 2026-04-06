@@ -24,7 +24,7 @@ const RESTAURANT_TABLES = [
   "T7", "T8", "T9", "T10", "T11", "T12",
 ];
 
-function getTableStatus(orders: OrderWithItems[], tableNumber: string) {
+function getTableStatus(orders: OrderWithItems[], tableNumber: string, tickets: PreparationTicketWithItems[]) {
   const order = orders.find(
     (o) => o.table_number === tableNumber && !["paid", "cancelled"].includes(o.status ?? "")
   );
@@ -37,11 +37,21 @@ function getTableStatus(orders: OrderWithItems[], tableNumber: string) {
     served: "occupied",
   };
 
+  const orderTickets = tickets.filter((t) => t.order_id === order.id);
+  const stationBadges = orderTickets
+    .filter((t) => t.status !== "served")
+    .map((t) => ({
+      station_name: t.station_name,
+      station_color: t.station_color,
+      status: t.status,
+    }));
+
   return {
     status: statusMap[order.status ?? ""] ?? ("occupied" as const),
     orderTotal: order.total ?? undefined,
     orderCreatedAt: order.created_at ?? undefined,
     guestCount: order.order_items.length,
+    stationBadges,
   };
 }
 
@@ -137,12 +147,14 @@ export default function CommandesPage() {
   const fetchData = useCallback(async () => {
     try {
       const today = new Date().toISOString().slice(0, 10);
-      const [ordersData, statsData] = await Promise.all([
+      const [ordersData, statsData, ticketsData] = await Promise.all([
         getActiveOrders(),
         getOrderStats(today),
+        getPreparationTickets(),
       ]);
       setOrders(ordersData);
       setStats(statsData);
+      setPrepTickets(ticketsData);
     } catch (error) {
       console.error("Erreur chargement commandes:", error);
     } finally {
@@ -161,7 +173,7 @@ export default function CommandesPage() {
 
   const tables = RESTAURANT_TABLES.map((t) => ({
     tableNumber: t,
-    ...getTableStatus(orders, t),
+    ...getTableStatus(orders, t, prepTickets),
   }));
 
   const selectedOrder = selectedTable

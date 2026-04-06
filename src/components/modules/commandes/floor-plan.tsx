@@ -4,12 +4,19 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TableCard, type TableStatus } from "./table-card";
 
+interface StationBadge {
+  station_name: string;
+  station_color: string;
+  status: string;
+}
+
 interface FloorPlanTable {
   tableNumber: string;
   status: TableStatus;
   orderTotal?: number;
   guestCount?: number;
   orderCreatedAt?: string;
+  stationBadges?: StationBadge[];
 }
 
 interface FloorPlanProps {
@@ -73,6 +80,7 @@ export function FloorPlan({
                 }
                 onClick={() => onSelectTable(table.tableNumber)}
                 isSelected={selectedTable === table.tableNumber}
+                stationBadges={table.stationBadges}
               />
             ))}
           </div>
@@ -82,4 +90,4 @@ export function FloorPlan({
   );
 }
 
-export type { FloorPlanProps, FloorPlanTable };
+export type { FloorPlanProps, FloorPlanTable, StationBadge };

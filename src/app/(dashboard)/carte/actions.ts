@@ -115,6 +115,31 @@ export async function updateCategory(
   return data;
 }
 
+export async function updateCategoryStation(
+  id: string,
+  stationId: string | null
+): Promise<void> {
+  const supabase = await getSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("restaurant_id")
+    .eq("id", user!.id)
+    .single();
+
+  const { error } = await supabase
+    .from("menu_categories")
+    .update({ default_station_id: stationId })
+    .eq("id", id)
+    .eq("restaurant_id", profile!.restaurant_id!);
+
+  if (error) {
+    throw new Error(`Erreur mise a jour du poste categorie : ${error.message}`);
+  }
+}
+
 export async function deleteCategory(id: string): Promise<void> {
   const supabase = await getSupabase();
   const { error } = await supabase
