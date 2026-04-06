@@ -47,15 +47,15 @@ export default function CuisinePage() {
   const boardOrders = orders.map((o) => ({
     id: o.id,
     table_number: o.table_number,
-    status: o.status,
-    created_at: o.created_at,
+    status: o.status ?? "pending",
+    created_at: o.created_at ?? new Date().toISOString(),
     notes: o.notes,
     items: o.order_items.map((item) => ({
       id: item.id,
       product_name: item.product_name,
       quantity: item.quantity,
       notes: item.notes,
-      status: item.status,
+      status: item.status ?? "pending",
     })),
   }));
 
