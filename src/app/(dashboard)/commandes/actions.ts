@@ -284,7 +284,7 @@ export async function getOrderStats(date: string): Promise<OrderStats> {
 
   for (const row of rows) {
     const status = row.status as OrderStatus;
-    revenue += row.total;
+    revenue += row.total ?? 0;
 
     if (activeStatuses.includes(status)) {
       activeOrders++;
