@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ClipboardList } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -121,7 +122,8 @@ function NouvelleCommandeContent() {
       clearCart();
       router.push("/commandes");
     } catch (error) {
-      console.error("Erreur création commande:", error);
+      const message = error instanceof Error ? error.message : "Erreur lors de la création de la commande";
+      toast.error(message);
     } finally {
       setSubmitting(false);
     }

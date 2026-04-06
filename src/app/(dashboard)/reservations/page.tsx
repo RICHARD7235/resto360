@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Plus } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useReservationsStore } from "@/stores/reservations.store";
 import { ReservationsStats } from "@/components/modules/reservations/reservations-stats";
@@ -161,11 +162,15 @@ export default function ReservationsPage() {
 
   async function handleStatusChange(status: string) {
     if (!selectedReservation) return;
-    await updateReservationStatus(selectedReservation.id, status as never);
-    // Refresh detail
-    const updated = await getReservation(selectedReservation.id);
-    setSelectedReservation(updated);
-    await fetchData();
+    try {
+      await updateReservationStatus(selectedReservation.id, status as never);
+      const updated = await getReservation(selectedReservation.id);
+      setSelectedReservation(updated);
+      await fetchData();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erreur lors du changement de statut";
+      toast.error(message);
+    }
   }
 
   // -------------------------------------------------------------------------

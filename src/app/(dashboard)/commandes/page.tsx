@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Plus, ChefHat } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useCommandesStore } from "@/stores/commandes.store";
 import { FloorPlan } from "@/components/modules/commandes/floor-plan";
@@ -185,8 +186,13 @@ export default function CommandesPage() {
     : null;
 
   async function handleStatusChange(orderId: string, status: string) {
-    await updateOrderStatus(orderId, status as never);
-    await fetchData();
+    try {
+      await updateOrderStatus(orderId, status as never);
+      await fetchData();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erreur lors du changement de statut";
+      toast.error(message);
+    }
   }
 
   if (loading) {

@@ -10,6 +10,7 @@ import {
   Search,
   UtensilsCrossed,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -132,22 +133,32 @@ export default function CartePage() {
   // -----------------------------------------------------------------------
 
   async function handleToggleAvailability(id: string, available: boolean) {
-    await toggleProductAvailability(id, available);
-    setProducts((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, is_available: available } : p))
-    );
-    setStats((prev) => ({
-      ...prev,
-      availableProducts: prev.availableProducts + (available ? 1 : -1),
-    }));
+    try {
+      await toggleProductAvailability(id, available);
+      setProducts((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, is_available: available } : p))
+      );
+      setStats((prev) => ({
+        ...prev,
+        availableProducts: prev.availableProducts + (available ? 1 : -1),
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erreur lors du changement de disponibilité";
+      toast.error(message);
+    }
   }
 
   async function handleEditProduct(id: string) {
-    const product = await getProduct(id);
-    if (product) {
-      setEditingProduct(product);
-      setDefaultCategoryId(undefined);
-      setProductFormOpen(true);
+    try {
+      const product = await getProduct(id);
+      if (product) {
+        setEditingProduct(product);
+        setDefaultCategoryId(undefined);
+        setProductFormOpen(true);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erreur lors du chargement du produit";
+      toast.error(message);
     }
   }
 
@@ -158,8 +169,13 @@ export default function CartePage() {
   }
 
   async function handleDeleteProduct(id: string) {
-    await deleteProduct(id);
-    loadData();
+    try {
+      await deleteProduct(id);
+      loadData();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erreur lors de la suppression du produit";
+      toast.error(message);
+    }
   }
 
   async function handleProductSubmit(data: ProductFormData) {
@@ -173,6 +189,9 @@ export default function CartePage() {
       setProductFormOpen(false);
       setEditingProduct(null);
       loadData();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erreur lors de l'enregistrement du produit";
+      toast.error(message);
     } finally {
       setFormLoading(false);
     }
@@ -183,19 +202,29 @@ export default function CartePage() {
   // -----------------------------------------------------------------------
 
   async function handleSelectRecipe(id: string) {
-    const recipe = await getRecipe(id);
-    if (recipe) {
-      setSelectedRecipe(recipe);
-      setRecipeDetailOpen(true);
+    try {
+      const recipe = await getRecipe(id);
+      if (recipe) {
+        setSelectedRecipe(recipe);
+        setRecipeDetailOpen(true);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erreur lors du chargement de la recette";
+      toast.error(message);
     }
   }
 
   async function handleEditRecipe(id: string) {
-    const recipe = await getRecipe(id);
-    if (recipe) {
-      setEditingRecipe(recipe);
-      setRecipeDetailOpen(false);
-      setRecipeFormOpen(true);
+    try {
+      const recipe = await getRecipe(id);
+      if (recipe) {
+        setEditingRecipe(recipe);
+        setRecipeDetailOpen(false);
+        setRecipeFormOpen(true);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erreur lors du chargement de la recette";
+      toast.error(message);
     }
   }
 
@@ -205,9 +234,14 @@ export default function CartePage() {
   }
 
   async function handleDeleteRecipe(id: string) {
-    await deleteRecipe(id);
-    setRecipeDetailOpen(false);
-    loadData();
+    try {
+      await deleteRecipe(id);
+      setRecipeDetailOpen(false);
+      loadData();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erreur lors de la suppression de la recette";
+      toast.error(message);
+    }
   }
 
   async function handleRecipeSubmit(data: RecipeFormData) {
@@ -223,6 +257,9 @@ export default function CartePage() {
       setRecipeFormOpen(false);
       setEditingRecipe(null);
       loadData();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erreur lors de l'enregistrement de la recette";
+      toast.error(message);
     } finally {
       setFormLoading(false);
     }
@@ -236,12 +273,17 @@ export default function CartePage() {
     categoryId: string,
     stationId: string | null
   ) {
-    await updateCategoryStation(categoryId, stationId);
-    setCategories((prev) =>
-      prev.map((c) =>
-        c.id === categoryId ? { ...c, default_station_id: stationId } : c
-      )
-    );
+    try {
+      await updateCategoryStation(categoryId, stationId);
+      setCategories((prev) =>
+        prev.map((c) =>
+          c.id === categoryId ? { ...c, default_station_id: stationId } : c
+        )
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erreur lors de la mise à jour du poste";
+      toast.error(message);
+    }
   }
 
   // -----------------------------------------------------------------------
@@ -249,15 +291,25 @@ export default function CartePage() {
   // -----------------------------------------------------------------------
 
   async function handleToggleMenuAvailability(id: string, available: boolean) {
-    await toggleMenuAvailability(id, available);
-    setMenus((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, is_available: available } : m))
-    );
+    try {
+      await toggleMenuAvailability(id, available);
+      setMenus((prev) =>
+        prev.map((m) => (m.id === id ? { ...m, is_available: available } : m))
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erreur lors du changement de disponibilité";
+      toast.error(message);
+    }
   }
 
   async function handleDeleteMenu(id: string) {
-    await deleteMenu(id);
-    loadData();
+    try {
+      await deleteMenu(id);
+      loadData();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erreur lors de la suppression du menu";
+      toast.error(message);
+    }
   }
 
   // -----------------------------------------------------------------------

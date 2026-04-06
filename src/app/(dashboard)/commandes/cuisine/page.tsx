@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { ArrowLeft, Settings } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { KitchenBoard } from "@/components/modules/commandes/kitchen-board";
@@ -49,13 +50,23 @@ function CuisineContent() {
   }, [fetchData]);
 
   async function handleItemStatusChange(itemId: string, status: string) {
-    await updateOrderItemStatus(itemId, status as never);
-    await fetchData();
+    try {
+      await updateOrderItemStatus(itemId, status as never);
+      await fetchData();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erreur lors du changement de statut";
+      toast.error(message);
+    }
   }
 
   async function handleTicketStatusChange(ticketId: string, status: string) {
-    await updatePreparationTicketStatus(ticketId, status as never);
-    await fetchData();
+    try {
+      await updatePreparationTicketStatus(ticketId, status as never);
+      await fetchData();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erreur lors du changement de statut du ticket";
+      toast.error(message);
+    }
   }
 
   const currentStation = activeTab
