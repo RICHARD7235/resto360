@@ -3,6 +3,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import type { Tables, Database } from "@/types/database.types";
+import {
+  createPreparationTickets,
+  addItemsToPreparationTickets,
+} from "@/lib/preparation-tickets";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -58,6 +62,29 @@ export interface OrderStats {
   revenue: number;
   activeOrders: number;
   completedOrders: number;
+}
+
+export type PreparationTicketStatus = "pending" | "in_progress" | "ready" | "served";
+
+export interface PreparationTicketWithItems {
+  id: string;
+  order_id: string;
+  station_id: string;
+  station_name: string;
+  station_color: string;
+  status: string;
+  started_at: string | null;
+  ready_at: string | null;
+  created_at: string;
+  table_number: string | null;
+  order_notes: string | null;
+  items: {
+    id: string;
+    product_name: string;
+    quantity: number;
+    notes: string | null;
+    status: string;
+  }[];
 }
 
 // ---------------------------------------------------------------------------
@@ -349,6 +376,157 @@ export async function getMenusForOrder(): Promise<MenuWithItems[]> {
   }));
 }
 
+export async function getPreparationTickets(
+  stationId?: string
+): Promise<PreparationTicketWithItems[]> {
+  const restaurantId = await getUserRestaurantId();
+  const supabase = await createClient();
+
+  const today = new Date().toISOString().split("T")[0];
+
+  const { data: orders } = await supabase
+    .from("orders")
+    .select("id, table_number, notes")
+    .eq("restaurant_id", restaurantId)
+    .gte("created_at", today)
+    .in("status", ["pending", "in_progress", "ready"]);
+
+  if (!orders || orders.length === 0) return [];
+
+  const orderIds = orders.map((o) => o.id);
+  const orderMap = new Map(orders.map((o) => [o.id, o]));
+
+  let ticketQuery = supabase
+    .from("preparation_tickets")
+    .select("*")
+    .in("order_id", orderIds)
+    .in("status", ["pending", "in_progress", "ready"])
+    .order("created_at", { ascending: true });
+
+  if (stationId) {
+    ticketQuery = ticketQuery.eq("station_id", stationId);
+  }
+
+  const { data: tickets } = await ticketQuery;
+  if (!tickets || tickets.length === 0) return [];
+
+  const stationIds = [...new Set(tickets.map((t) => t.station_id))];
+  const { data: stations } = await supabase
+    .from("preparation_stations")
+    .select("id, name, color")
+    .in("id", stationIds);
+
+  const stationMap = new Map(
+    (stations ?? []).map((s) => [s.id, { name: s.name, color: s.color ?? "#6B7280" }])
+  );
+
+  const ticketIds = tickets.map((t) => t.id);
+  const { data: items } = await supabase
+    .from("order_items")
+    .select("id, product_name, quantity, notes, status, preparation_ticket_id")
+    .in("preparation_ticket_id", ticketIds);
+
+  const itemsByTicket = new Map<string, typeof items>();
+  for (const item of items ?? []) {
+    if (!item.preparation_ticket_id) continue;
+    const existing = itemsByTicket.get(item.preparation_ticket_id) ?? [];
+    existing.push(item);
+    itemsByTicket.set(item.preparation_ticket_id, existing);
+  }
+
+  return tickets.map((ticket) => {
+    const order = orderMap.get(ticket.order_id);
+    const station = stationMap.get(ticket.station_id);
+    return {
+      id: ticket.id,
+      order_id: ticket.order_id,
+      station_id: ticket.station_id,
+      station_name: station?.name ?? "Inconnu",
+      station_color: station?.color ?? "#6B7280",
+      status: ticket.status ?? "pending",
+      started_at: ticket.started_at,
+      ready_at: ticket.ready_at,
+      created_at: ticket.created_at ?? new Date().toISOString(),
+      table_number: order?.table_number ?? null,
+      order_notes: order?.notes ?? null,
+      items: (itemsByTicket.get(ticket.id) ?? []).map((item) => ({
+        id: item.id,
+        product_name: item.product_name,
+        quantity: item.quantity,
+        notes: item.notes,
+        status: item.status ?? "pending",
+      })),
+    };
+  });
+}
+
+export async function updatePreparationTicketStatus(
+  ticketId: string,
+  status: PreparationTicketStatus
+): Promise<void> {
+  const restaurantId = await getUserRestaurantId();
+  const supabase = await createClient();
+
+  const updates: Record<string, unknown> = { status };
+
+  if (status === "in_progress") {
+    updates.started_at = new Date().toISOString();
+  } else if (status === "ready") {
+    updates.ready_at = new Date().toISOString();
+  }
+
+  const { error } = await supabase
+    .from("preparation_tickets")
+    .update(updates)
+    .eq("id", ticketId);
+
+  if (error) {
+    throw new Error(`Erreur mise a jour ticket: ${error.message}`);
+  }
+
+  // Auto-aggregate order status
+  const { data: ticket } = await supabase
+    .from("preparation_tickets")
+    .select("order_id")
+    .eq("id", ticketId)
+    .single();
+
+  if (!ticket) return;
+
+  const { data: allTickets } = await supabase
+    .from("preparation_tickets")
+    .select("status")
+    .eq("order_id", ticket.order_id);
+
+  if (!allTickets || allTickets.length === 0) return;
+
+  const statuses = allTickets.map((t) => t.status ?? "pending");
+
+  let orderStatus: OrderStatus;
+  if (statuses.every((s) => s === "served")) {
+    orderStatus = "served";
+  } else if (statuses.every((s) => s === "ready" || s === "served")) {
+    orderStatus = "ready";
+  } else if (statuses.some((s) => s === "in_progress")) {
+    orderStatus = "in_progress";
+  } else {
+    orderStatus = "pending";
+  }
+
+  const { data: order } = await supabase
+    .from("orders")
+    .select("restaurant_id")
+    .eq("id", ticket.order_id)
+    .single();
+
+  if (order?.restaurant_id !== restaurantId) return;
+
+  await supabase
+    .from("orders")
+    .update({ status: orderStatus, updated_at: new Date().toISOString() })
+    .eq("id", ticket.order_id);
+}
+
 // ---------------------------------------------------------------------------
 // Mutations
 // ---------------------------------------------------------------------------
@@ -410,6 +588,19 @@ export async function createOrder(data: {
     throw new Error(
       `Erreur lors de l'ajout des articles : ${itemsError.message}`
     );
+  }
+
+  // Create preparation tickets (split by station)
+  const itemsForTickets = (orderItems ?? []).map((item) => ({
+    order_item_id: item.id,
+    product_id: item.product_id,
+  }));
+
+  try {
+    await createPreparationTickets(order.id, itemsForTickets, restaurantId);
+  } catch (error) {
+    console.error("Erreur creation tickets preparation:", error);
+    // Non-blocking: order is created even if tickets fail
   }
 
   return { ...order, order_items: orderItems ?? [] };
@@ -553,6 +744,28 @@ export async function addItemsToOrder(
     throw new Error(
       `Erreur lors de la mise à jour du total : ${updateError.message}`
     );
+  }
+
+  // Update preparation tickets for new items
+  const { data: newItems } = await supabase
+    .from("order_items")
+    .select("id, product_id")
+    .eq("order_id", orderId)
+    .is("preparation_ticket_id", null);
+
+  if (newItems && newItems.length > 0) {
+    try {
+      await addItemsToPreparationTickets(
+        orderId,
+        newItems.map((item) => ({
+          order_item_id: item.id,
+          product_id: item.product_id,
+        })),
+        restaurantId
+      );
+    } catch (error) {
+      console.error("Erreur mise a jour tickets preparation:", error);
+    }
   }
 
   // Return full order with items
