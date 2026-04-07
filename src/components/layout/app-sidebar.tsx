@@ -16,6 +16,7 @@ import {
   Megaphone,
   BarChart3,
   FileText,
+  ShieldCheck,
   Settings,
 } from "lucide-react";
 import {
@@ -39,6 +40,7 @@ const modules = [
       { name: "Réservations", href: "/reservations", icon: CalendarDays },
       { name: "Commandes", href: "/commandes", icon: UtensilsCrossed },
       { name: "Carte & Recettes", href: "/carte", icon: BookOpen },
+      { name: "Qualité H&S", href: "/qualite", icon: ShieldCheck },
     ],
   },
   {
