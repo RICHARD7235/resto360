@@ -28,14 +28,13 @@ export async function getUserRestaurantId(): Promise<string> {
 }
 
 // Whitelist rôles autorisés à accéder aux pages admin QHS.
-// Doit rester alignée avec ADMIN_ROLES dans src/lib/supabase/qhs/mutations.ts.
+// ATTENTION : deux taxonomies coexistent.
+//  - profiles.role (Supabase auth users) : "owner", "manager", "admin"...
+//  - staff_members.role (PIN clôture NC) : "Gérant", "Adjointe de direction"...
+// Cette liste vise profiles.role (auth web). Pour la clôture NC voir
+// ADMIN_ROLES dans src/lib/supabase/qhs/mutations.ts.
 // TODO post-démo : remplacer par RBAC propre (table roles + permissions).
-export const QHS_ADMIN_ROLES = [
-  "manager",
-  "admin",
-  "Gérant",
-  "Adjointe de direction",
-];
+export const QHS_ADMIN_ROLES = ["owner", "manager", "admin"];
 
 export async function requireQhsAdmin(): Promise<{
   restaurantId: string;
