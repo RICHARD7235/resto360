@@ -26,3 +26,42 @@ export async function getUserRestaurantId(): Promise<string> {
 
   return profile.restaurant_id;
 }
+
+// Whitelist rôles autorisés à accéder aux pages admin QHS.
+// Doit rester alignée avec ADMIN_ROLES dans src/lib/supabase/qhs/mutations.ts.
+// TODO post-démo : remplacer par RBAC propre (table roles + permissions).
+export const QHS_ADMIN_ROLES = [
+  "manager",
+  "admin",
+  "Gérant",
+  "Adjointe de direction",
+];
+
+export async function requireQhsAdmin(): Promise<{
+  restaurantId: string;
+  role: string;
+}> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/connexion");
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("restaurant_id, role")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile?.restaurant_id) {
+    throw new Error("Aucun restaurant associé à votre compte.");
+  }
+
+  if (!profile.role || !QHS_ADMIN_ROLES.includes(profile.role)) {
+    redirect("/qualite/nettoyage");
+  }
+
+  return { restaurantId: profile.restaurant_id, role: profile.role };
+}
