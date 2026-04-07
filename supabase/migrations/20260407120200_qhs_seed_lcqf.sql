@@ -27,7 +27,7 @@ BEGIN
   -- Lookup restaurant LCQF
   SELECT id INTO v_resto
   FROM restaurants
-  WHERE nom ILIKE '%cabane%'
+  WHERE name ILIKE '%cabane%'
   LIMIT 1;
 
   IF v_resto IS NULL THEN
