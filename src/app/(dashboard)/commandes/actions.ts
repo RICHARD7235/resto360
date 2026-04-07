@@ -520,7 +520,8 @@ export async function updatePreparationTicketStatus(
 
   const { error } = await supabase
     .from("preparation_tickets")
-    .update(updates)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .update(updates as any)
     .eq("id", ticketId);
 
   if (error) {
