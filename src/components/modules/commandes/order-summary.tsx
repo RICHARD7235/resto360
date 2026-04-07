@@ -1,10 +1,13 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Clock, Users, Receipt } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { Tables } from "@/types/database.types";
+
+function computeElapsed(createdAt: string) {
+  return Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000);
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -27,7 +30,7 @@ interface OrderSummaryProps {
     }[];
   };
   onViewDetail: () => void;
-  onStatusChange: (orderId: string, status: string) => void;
+  onStatusChange?: (orderId: string, status: string) => void;
 }
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -44,10 +47,15 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
 // Component
 // ---------------------------------------------------------------------------
 
-export function OrderSummary({ order, onViewDetail, onStatusChange }: OrderSummaryProps) {
-  const elapsed = Math.floor(
-    (Date.now() - new Date(order.created_at).getTime()) / 60000
-  );
+export function OrderSummary({ order, onViewDetail }: OrderSummaryProps) {
+  const [elapsed, setElapsed] = useState(() => computeElapsed(order.created_at));
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setElapsed(computeElapsed(order.created_at));
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, [order.created_at]);
 
   const config = statusConfig[order.status] ?? { label: order.status, variant: "outline" as const };
 

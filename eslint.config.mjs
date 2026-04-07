@@ -13,6 +13,18 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  // Legacy QHS (M13) — types Supabase générés sans Relationships,
+  // `any` ponctuel accepté le temps de la migration. Ciblé uniquement
+  // sur ces fichiers, jamais global.
+  {
+    files: [
+      "src/lib/supabase/qhs/**",
+      "src/lib/qhs/pdf-export.ts",
+    ],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;
