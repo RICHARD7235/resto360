@@ -116,9 +116,17 @@ export async function closeNonConformity(
     .eq("restaurant_id", (nc as { restaurant_id: string }).restaurant_id)
     .eq("is_active", true);
 
+  // Whitelist élargie : rôles admin/manager LCQF (texte libre, non normalisé)
+  // TODO post-démo : RBAC propre avec table roles + permissions
+  const ADMIN_ROLES = [
+    "manager",
+    "admin",
+    "Gérant",
+    "Adjointe de direction",
+  ];
   const matched = (perso ?? []).find(
     (p: { pin_hash: string | null; role: string }) =>
-      p.pin_hash === pinHash && p.role === "manager",
+      p.pin_hash === pinHash && ADMIN_ROLES.includes(p.role),
   );
   if (!matched)
     return { ok: false, error: "PIN invalide ou rôle insuffisant" };
