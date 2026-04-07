@@ -276,6 +276,88 @@ export async function deleteDocument(
   }
 }
 
+const REGISTER_SEEDS: Array<{
+  slug: string;
+  label: string;
+  description: string;
+  source_module: "M05" | "M07" | "M11" | "M12" | "M13";
+  source_url: string;
+}> = [
+  {
+    slug: "registre-personnel",
+    label: "Registre du personnel",
+    description:
+      "Liste obligatoire des salariés (entrées/sorties, contrats, qualifications).",
+    source_module: "M07",
+    source_url: "/personnel",
+  },
+  {
+    slug: "registre-haccp",
+    label: "Registre HACCP",
+    description:
+      "Plan de maîtrise sanitaire, traçabilité, températures, nettoyage.",
+    source_module: "M13",
+    source_url: "/qhs",
+  },
+  {
+    slug: "duerp",
+    label: "DUERP",
+    description:
+      "Document Unique d'Évaluation des Risques Professionnels (mise à jour annuelle).",
+    source_module: "M12",
+    source_url: "/documents/bibliotheque?cat=legal",
+  },
+  {
+    slug: "registre-entrees-sorties",
+    label: "Registre entrées / sorties marchandises",
+    description:
+      "Suivi des achats, livraisons et sorties de stock pour la traçabilité.",
+    source_module: "M05",
+    source_url: "/stock",
+  },
+  {
+    slug: "bilans-comptables",
+    label: "Bilans comptables",
+    description:
+      "Bilans, comptes de résultat et liasses fiscales annuelles.",
+    source_module: "M11",
+    source_url: "/comptabilite",
+  },
+];
+
+export async function seedRegistersIfMissing(
+  restaurantId: string
+): Promise<{ ok: boolean; created: number; error?: string }> {
+  try {
+    await requireQhsAdmin();
+    const supabase = await untyped();
+    const { data: existing, error: selErr } = await supabase
+      .from("legal_registers")
+      .select("id")
+      .eq("restaurant_id", restaurantId)
+      .limit(1);
+    if (selErr) return { ok: false, created: 0, error: selErr.message };
+    if ((existing ?? []).length > 0) return { ok: true, created: 0 };
+
+    const rows = REGISTER_SEEDS.map((s) => ({
+      restaurant_id: restaurantId,
+      slug: s.slug,
+      label: s.label,
+      description: s.description,
+      source_module: s.source_module,
+      source_url: s.source_url,
+      status: "a-verifier",
+    }));
+    const { error: insErr } = await supabase.from("legal_registers").insert(rows);
+    if (insErr) return { ok: false, created: 0, error: insErr.message };
+    revalidatePath("/documents/registres");
+    return { ok: true, created: rows.length };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Erreur inconnue.";
+    return { ok: false, created: 0, error: msg };
+  }
+}
+
 export async function getDownloadUrl(
   versionId: string
 ): Promise<{ ok: boolean; url?: string; error?: string }> {
