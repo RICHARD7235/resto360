@@ -24,9 +24,25 @@ export async function triggerExpirationCheck(): Promise<{
   created: number;
   error?: string;
 }> {
-  // Stub : la vraie implémentation invoquera l'edge function
-  // documents-check-expirations dans Task 8.
-  return { ok: true, checked: 0, created: 0 };
+  try {
+    await requireQhsAdmin();
+    const supabase = await createClient();
+    const { data, error } = await supabase.functions.invoke(
+      "documents-check-expirations",
+    );
+    if (error) {
+      return { ok: false, checked: 0, created: 0, error: error.message };
+    }
+    const payload = (data ?? {}) as { checked?: number; created?: number };
+    return {
+      ok: true,
+      checked: payload.checked ?? 0,
+      created: payload.created ?? 0,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Erreur inconnue.";
+    return { ok: false, checked: 0, created: 0, error: msg };
+  }
 }
 
 export async function createDocument(
