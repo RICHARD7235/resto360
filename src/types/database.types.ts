@@ -576,6 +576,47 @@ export type Database = {
           },
         ]
       }
+      role_permissions: {
+        Row: {
+          can_delete: boolean
+          can_read: boolean
+          can_write: boolean
+          created_at: string
+          id: string
+          module: string
+          restaurant_id: string
+          role: string
+        }
+        Insert: {
+          can_delete?: boolean
+          can_read?: boolean
+          can_write?: boolean
+          created_at?: string
+          id?: string
+          module: string
+          restaurant_id: string
+          role: string
+        }
+        Update: {
+          can_delete?: boolean
+          can_read?: boolean
+          can_write?: boolean
+          created_at?: string
+          id?: string
+          module?: string
+          restaurant_id?: string
+          role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_permissions_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       purchase_order_items: {
         Row: {
           catalog_item_id: string | null
