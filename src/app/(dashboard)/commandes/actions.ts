@@ -27,6 +27,78 @@ function getTodayDateString(): string {
 }
 
 // ---------------------------------------------------------------------------
+// Course resolution
+// ---------------------------------------------------------------------------
+
+const COURSE_LABELS: Record<number, string> = {
+  0: "Immediat",
+  1: "Entrees",
+  2: "Plats",
+  3: "Desserts",
+};
+
+function getCourseLabel(course: number): string {
+  return COURSE_LABELS[course] ?? `Service ${course}`;
+}
+
+/**
+ * Resolves course_number for each item based on product → category → default_course.
+ * For takeaway/delivery, all items are course 0 (no sequencing).
+ */
+async function resolveCourseNumbers(
+  productIds: (string | null)[],
+  orderType: OrderType
+): Promise<Map<string, number>> {
+  const result = new Map<string, number>();
+
+  // Takeaway/delivery: everything is course 0
+  if (orderType === "takeaway" || orderType === "delivery") {
+    for (const id of productIds) {
+      if (id) result.set(id, 0);
+    }
+    return result;
+  }
+
+  const uniqueIds = [...new Set(productIds.filter((id): id is string => id !== null))];
+  if (uniqueIds.length === 0) return result;
+
+  const supabase = await createClient();
+
+  const { data: products } = await supabase
+    .from("products")
+    .select("id, category_id")
+    .in("id", uniqueIds);
+
+  if (!products) return result;
+
+  const categoryIds = products
+    .map((p) => p.category_id)
+    .filter((id): id is string => id !== null)
+    .filter((id, i, arr) => arr.indexOf(id) === i);
+
+  const courseByCategory = new Map<string, number>();
+  if (categoryIds.length > 0) {
+    const { data: categories } = await supabase
+      .from("menu_categories")
+      .select("id, default_course")
+      .in("id", categoryIds);
+
+    for (const cat of categories ?? []) {
+      courseByCategory.set(cat.id, cat.default_course ?? 1);
+    }
+  }
+
+  for (const product of products) {
+    const course = product.category_id
+      ? courseByCategory.get(product.category_id) ?? 1
+      : 1;
+    result.set(product.id, course);
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -132,6 +204,7 @@ export interface PreparationTicketWithItems {
   started_at: string | null;
   ready_at: string | null;
   created_at: string;
+  course_number: number;
   table_number: string | null;
   order_notes: string | null;
   order_type: OrderType;
@@ -564,6 +637,8 @@ export async function getPreparationTickets(
     .select("*")
     .in("order_id", orderIds)
     .in("status", ["pending", "in_progress", "ready"])
+    .not("fired_at", "is", null)
+    .order("course_number", { ascending: true })
     .order("created_at", { ascending: true });
 
   if (stationId) {
@@ -610,6 +685,7 @@ export async function getPreparationTickets(
       started_at: ticket.started_at,
       ready_at: ticket.ready_at,
       created_at: ticket.created_at ?? new Date().toISOString(),
+      course_number: ticket.course_number ?? 1,
       table_number: order?.table_number ?? null,
       order_notes: order?.notes ?? null,
       order_type: (order?.order_type ?? "dine_in") as OrderType,
@@ -662,19 +738,21 @@ export async function updatePreparationTicketStatus(
 
   const { data: allTickets } = await supabase
     .from("preparation_tickets")
-    .select("status")
+    .select("status, fired_at")
     .eq("order_id", ticket.order_id);
 
   if (!allTickets || allTickets.length === 0) return;
 
-  const statuses = allTickets.map((t) => t.status ?? "pending");
+  const firedTickets = allTickets.filter((t) => t.fired_at !== null);
+  const holdTickets = allTickets.filter((t) => t.fired_at === null);
+  const firedStatuses = firedTickets.map((t) => t.status ?? "pending");
 
   let orderStatus: OrderStatus;
-  if (statuses.every((s) => s === "served")) {
+  if (firedStatuses.every((s) => s === "served") && holdTickets.length === 0) {
     orderStatus = "served";
-  } else if (statuses.every((s) => s === "ready" || s === "served")) {
+  } else if (firedStatuses.every((s) => s === "ready" || s === "served")) {
     orderStatus = "ready";
-  } else if (statuses.some((s) => s === "in_progress")) {
+  } else if (firedStatuses.some((s) => s === "in_progress")) {
     orderStatus = "preparing";
   } else {
     orderStatus = "sent";
@@ -692,6 +770,120 @@ export async function updatePreparationTicketStatus(
     .from("orders")
     .update({ status: orderStatus, updated_at: new Date().toISOString() })
     .eq("id", ticket.order_id);
+}
+
+// ---------------------------------------------------------------------------
+// Course firing
+// ---------------------------------------------------------------------------
+
+export async function fireNextCourse(orderId: string): Promise<{ firedCourse: number } | null> {
+  const { restaurantId, role } = await getUserContext();
+  const supabase = await createClient();
+
+  // RBAC: only salle roles can fire
+  if (!["owner", "admin", "manager", "staff"].includes(role)) {
+    throw new Error("Seule la salle peut envoyer le service suivant.");
+  }
+
+  // Verify order belongs to restaurant
+  const { data: order } = await supabase
+    .from("orders")
+    .select("id, restaurant_id")
+    .eq("id", orderId)
+    .eq("restaurant_id", restaurantId)
+    .single();
+
+  if (!order) {
+    throw new Error("Commande non trouvee.");
+  }
+
+  // Find the smallest held course
+  const { data: heldTickets } = await supabase
+    .from("preparation_tickets")
+    .select("id, course_number")
+    .eq("order_id", orderId)
+    .is("fired_at", null)
+    .order("course_number", { ascending: true });
+
+  if (!heldTickets || heldTickets.length === 0) {
+    return null; // Nothing to fire
+  }
+
+  const nextCourse = heldTickets[0].course_number ?? 1;
+  const ticketsToFire = heldTickets.filter((t) => (t.course_number ?? 1) === nextCourse);
+
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("preparation_tickets")
+    .update({ fired_at: now })
+    .in("id", ticketsToFire.map((t) => t.id));
+
+  if (error) {
+    throw new Error(`Erreur envoi service: ${error.message}`);
+  }
+
+  return { firedCourse: nextCourse };
+}
+
+export async function getOrderCourseStatus(orderId: string): Promise<{
+  courses: { course_number: number; label: string; status: "hold" | "fired" | "ready" | "served"; ticketCount: number }[];
+  nextFireableCourse: number | null;
+}> {
+  await getUserRestaurantId();
+  const supabase = await createClient();
+
+  const { data: tickets } = await supabase
+    .from("preparation_tickets")
+    .select("course_number, status, fired_at")
+    .eq("order_id", orderId);
+
+  if (!tickets || tickets.length === 0) {
+    return { courses: [], nextFireableCourse: null };
+  }
+
+  // Group by course
+  const byCourse = new Map<number, typeof tickets>();
+  for (const t of tickets) {
+    const c = t.course_number ?? 1;
+    const arr = byCourse.get(c) ?? [];
+    arr.push(t);
+    byCourse.set(c, arr);
+  }
+
+  const courses = [...byCourse.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([courseNum, courseTickets]) => {
+      const allFired = courseTickets.every((t) => t.fired_at !== null);
+      const statuses = courseTickets.map((t) => t.status ?? "pending");
+
+      let status: "hold" | "fired" | "ready" | "served";
+      if (!allFired) {
+        status = "hold";
+      } else if (statuses.every((s) => s === "served")) {
+        status = "served";
+      } else if (statuses.every((s) => s === "ready" || s === "served")) {
+        status = "ready";
+      } else {
+        status = "fired";
+      }
+
+      return {
+        course_number: courseNum,
+        label: getCourseLabel(courseNum),
+        status,
+        ticketCount: courseTickets.length,
+      };
+    });
+
+  // Next fireable = smallest held course, but only if all fired courses are ready/served
+  const firedCourses = courses.filter((c) => c.status !== "hold");
+  const allFiredDone = firedCourses.every((c) => c.status === "ready" || c.status === "served");
+  const heldCourses = courses.filter((c) => c.status === "hold");
+  const nextFireableCourse = allFiredDone && heldCourses.length > 0
+    ? heldCourses[0].course_number
+    : null;
+
+  return { courses, nextFireableCourse };
 }
 
 // ---------------------------------------------------------------------------
@@ -763,7 +955,11 @@ export async function createOrder(data: {
     );
   }
 
-  // Insert order items
+  // Resolve course numbers for all products
+  const productIds = data.items.map((item) => item.is_menu_header ? null : item.product_id);
+  const courseMap = await resolveCourseNumbers(productIds, orderType);
+
+  // Insert order items with course_number
   // Menu headers have synthetic product_ids (not real UUIDs) — set to null
   const itemsToInsert = data.items.map((item) => ({
     order_id: order.id,
@@ -775,6 +971,7 @@ export async function createOrder(data: {
     status: "pending" as const,
     menu_id: item.real_menu_id ?? null,
     menu_name: item.menu_name ?? null,
+    course_number: item.is_menu_header ? 0 : (courseMap.get(item.product_id) ?? 1),
   }));
 
   const { data: orderItems, error: itemsError } = await supabase
@@ -798,6 +995,7 @@ export async function createOrder(data: {
     .map((item) => ({
       order_item_id: item.id,
       product_id: item.product_id,
+      course_number: item.course_number ?? 1,
     }));
 
   try {
@@ -954,7 +1152,7 @@ export async function addItemsToOrder(
   // Update preparation tickets for new items
   const { data: newItems } = await supabase
     .from("order_items")
-    .select("id, product_id")
+    .select("id, product_id, course_number")
     .eq("order_id", orderId)
     .is("preparation_ticket_id", null);
 
@@ -965,6 +1163,7 @@ export async function addItemsToOrder(
         newItems.map((item) => ({
           order_item_id: item.id,
           product_id: item.product_id,
+          course_number: item.course_number ?? 1,
         })),
         restaurantId
       );

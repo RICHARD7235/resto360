@@ -34,6 +34,7 @@ export interface TicketData {
   station_color: string;
   status: string;
   created_at: string;
+  course_number?: number;
   table_number: string | null;
   order_notes: string | null;
   order_type?: string;
@@ -177,6 +178,11 @@ export function KitchenTicket({
                 style={{ backgroundColor: ticket.station_color }}
               >
                 {ticket.station_name}
+              </Badge>
+            )}
+            {ticket.course_number != null && ticket.course_number > 0 && (
+              <Badge variant="outline" className="text-xs border-white/30 text-white">
+                Service {ticket.course_number}
               </Badge>
             )}
             <Badge

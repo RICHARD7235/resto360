@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Clock, Users, Receipt, X, CreditCard, ShoppingBag, Truck, Store } from "lucide-react";
+import { Clock, Users, Receipt, X, CreditCard, ShoppingBag, Truck, Store, Flame, Pause } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardAction } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ interface OrderSummaryItem {
   unit_price: number;
   status: string;
   payment_id?: string | null;
+  course_number?: number;
 }
 
 interface OrderSummaryProps {
@@ -36,12 +37,15 @@ interface OrderSummaryProps {
     paid_amount?: number;
     customer_name?: string | null;
     items: OrderSummaryItem[];
+    courses?: { course_number: number; label: string; status: "hold" | "fired" | "ready" | "served" }[];
   };
   onViewDetail: () => void;
   onStatusChange?: (orderId: string, status: string) => void;
   onCancelItem?: (itemId: string, itemName: string) => void;
   onCancelOrder?: (orderId: string) => void;
   onOpenPayment?: (orderId: string) => void;
+  onFireNextCourse?: (orderId: string) => void;
+  nextFireableCourse?: number | null;
 }
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -64,12 +68,21 @@ const orderTypeConfig: Record<string, { label: string; icon: typeof Store }> = {
 // Component
 // ---------------------------------------------------------------------------
 
+const COURSE_LABELS: Record<number, string> = {
+  0: "Immediat",
+  1: "Entrees",
+  2: "Plats",
+  3: "Desserts",
+};
+
 export function OrderSummary({
   order,
   onViewDetail,
   onCancelItem,
   onCancelOrder,
   onOpenPayment,
+  onFireNextCourse,
+  nextFireableCourse,
 }: OrderSummaryProps) {
   const [elapsed, setElapsed] = useState(() => computeElapsed(order.created_at));
 
@@ -151,58 +164,144 @@ export function OrderSummary({
           </div>
         )}
 
-        <ul className="space-y-0.5 text-xs">
-          {order.items.slice(0, 6).map((item) => {
-            const isCancelled = item.status === "cancelled";
-            const isPaid = !!item.payment_id;
-            return (
-              <li
-                key={item.id}
-                className={cn(
-                  "flex items-center justify-between gap-1",
-                  isCancelled && "opacity-40 line-through"
-                )}
-              >
-                <span className="flex items-center gap-1 min-w-0">
-                  <span className="truncate">
-                    {item.quantity}x {item.product_name}
-                  </span>
-                  {isPaid && !isCancelled && (
-                    <Badge variant="outline" className="text-[9px] px-1 py-0 shrink-0">
-                      Paye
-                    </Badge>
+        <div className="space-y-2 text-xs">
+          {(() => {
+            const courses = order.courses ?? [];
+            const hasCourses = courses.length > 1;
+
+            if (!hasCourses) {
+              // No coursing — flat list (backward compat)
+              return (
+                <ul className="space-y-0.5">
+                  {order.items.slice(0, 6).map((item) => {
+                    const isCancelled = item.status === "cancelled";
+                    const isPaid = !!item.payment_id;
+                    return (
+                      <li
+                        key={item.id}
+                        className={cn(
+                          "flex items-center justify-between gap-1",
+                          isCancelled && "opacity-40 line-through"
+                        )}
+                      >
+                        <span className="flex items-center gap-1 min-w-0">
+                          <span className="truncate">
+                            {item.quantity}x {item.product_name}
+                          </span>
+                          {isPaid && !isCancelled && (
+                            <Badge variant="outline" className="text-[9px] px-1 py-0 shrink-0">
+                              Paye
+                            </Badge>
+                          )}
+                        </span>
+                        <span className="flex items-center gap-1 shrink-0">
+                          <span className="text-muted-foreground">
+                            {(item.quantity * item.unit_price).toFixed(2)} EUR
+                          </span>
+                          {onCancelItem && !isCancelled && canCancel && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 min-h-0 min-w-0 text-destructive hover:text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onCancelItem(item.id, item.product_name);
+                              }}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </span>
+                      </li>
+                    );
+                  })}
+                  {order.items.length > 6 && (
+                    <li className="text-muted-foreground italic">
+                      +{order.items.length - 6} autre{order.items.length - 6 > 1 ? "s" : ""}
+                    </li>
                   )}
-                </span>
-                <span className="flex items-center gap-1 shrink-0">
-                  <span className="text-muted-foreground">
-                    {(item.quantity * item.unit_price).toFixed(2)} EUR
-                  </span>
-                  {onCancelItem && !isCancelled && canCancel && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 min-h-0 min-w-0 text-destructive hover:text-destructive"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onCancelItem(item.id, item.product_name);
-                      }}
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  )}
-                </span>
-              </li>
-            );
-          })}
-          {order.items.length > 6 && (
-            <li className="text-muted-foreground italic">
-              +{order.items.length - 6} autre{order.items.length - 6 > 1 ? "s" : ""}
-            </li>
-          )}
-        </ul>
+                </ul>
+              );
+            }
+
+            // Course-grouped rendering
+            return courses.map((course) => {
+              const courseItems = order.items.filter(
+                (i) => (i.course_number ?? 1) === course.course_number
+              );
+              if (courseItems.length === 0) return null;
+
+              const statusIcon =
+                course.status === "ready" ? "🟢" :
+                course.status === "served" ? "✅" :
+                course.status === "fired" ? "🟡" :
+                "⏸️";
+
+              return (
+                <div
+                  key={course.course_number}
+                  className={cn(course.status === "hold" && "opacity-50")}
+                >
+                  <div className="flex items-center gap-1.5 mb-0.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wide">
+                    <span>{statusIcon}</span>
+                    <span>{course.label}</span>
+                  </div>
+                  <ul className="space-y-0.5 pl-4">
+                    {courseItems.map((item) => {
+                      const isCancelled = item.status === "cancelled";
+                      return (
+                        <li
+                          key={item.id}
+                          className={cn(
+                            "flex items-center justify-between gap-1",
+                            isCancelled && "opacity-40 line-through"
+                          )}
+                        >
+                          <span className="truncate">
+                            {item.quantity}x {item.product_name}
+                          </span>
+                          <span className="flex items-center gap-1 shrink-0">
+                            <span className="text-muted-foreground">
+                              {(item.quantity * item.unit_price).toFixed(2)} EUR
+                            </span>
+                            {onCancelItem && !isCancelled && canCancel && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 min-h-0 min-w-0 text-destructive hover:text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onCancelItem(item.id, item.product_name);
+                                }}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              );
+            });
+          })()}
+        </div>
 
         {/* Action buttons */}
         <div className="flex gap-2 pt-1">
+          {onFireNextCourse && nextFireableCourse != null && (
+            <Button
+              className="min-h-11 flex-1 gap-2 bg-orange-500 hover:bg-orange-600"
+              onClick={(e) => {
+                e.stopPropagation();
+                onFireNextCourse(order.id);
+              }}
+            >
+              <Flame className="h-4 w-4" />
+              Envoyer {COURSE_LABELS[nextFireableCourse] ?? `Service ${nextFireableCourse}`}
+            </Button>
+          )}
           {canPay && onOpenPayment && (
             <Button
               className="min-h-11 flex-1 gap-2"

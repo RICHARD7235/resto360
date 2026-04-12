@@ -24,6 +24,8 @@ import {
   cancelOrderItem,
   cancelOrder,
   getRestaurantTables,
+  fireNextCourse,
+  getOrderCourseStatus,
   type RestaurantTable,
 } from "./actions";
 import { getActiveStations } from "../admin-operationnelle/actions";
@@ -249,6 +251,10 @@ export default function CommandesPage() {
   const [reservations, setReservations] = useState<FloorPlanReservation[]>([]);
   const [restaurantId, setRestaurantId] = useState<string | null>(null);
   const [restaurantTables, setRestaurantTables] = useState<RestaurantTable[]>([]);
+  const [courseStatus, setCourseStatus] = useState<{
+    courses: { course_number: number; label: string; status: "hold" | "fired" | "ready" | "served" }[];
+    nextFireableCourse: number | null;
+  } | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
@@ -321,6 +327,22 @@ export default function CommandesPage() {
   });
 
   useTicketReadyNotifications(prepTickets);
+
+  // Fetch course status for selected order
+  useEffect(() => {
+    if (!selectedTable) {
+      setCourseStatus(null);
+      return;
+    }
+    const order = orders.find(
+      (o) => o.table_number === selectedTable && !["paid", "cancelled"].includes(o.status ?? "")
+    );
+    if (!order) {
+      setCourseStatus(null);
+      return;
+    }
+    getOrderCourseStatus(order.id).then(setCourseStatus).catch(() => setCourseStatus(null));
+  }, [selectedTable, orders, prepTickets]);
 
   // Map DB tables to CanvasTable[] with live status
   const canvasTables: CanvasTable[] = restaurantTables.map((rt) => {
@@ -405,6 +427,20 @@ export default function CommandesPage() {
   function handleOpenPayment(orderId: string) {
     setPaymentOrderId(orderId);
   }
+
+  const handleFireNextCourse = useCallback(async (orderId: string) => {
+    try {
+      const result = await fireNextCourse(orderId);
+      if (result) {
+        toast.success(`Service ${result.firedCourse} envoyé en cuisine !`);
+        await fetchData();
+      } else {
+        toast.info("Tous les services ont déjà été envoyés.");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erreur envoi service");
+    }
+  }, [fetchData]);
 
   if (loading) {
     return (
@@ -530,13 +566,17 @@ export default function CommandesPage() {
                     unit_price: item.unit_price,
                     status: item.status ?? "pending",
                     payment_id: item.payment_id ?? null,
+                    course_number: item.course_number ?? 1,
                   })),
+                  courses: courseStatus?.courses,
                 }}
                 onViewDetail={() => {}}
                 onStatusChange={handleStatusChange}
                 onCancelItem={handleCancelItem}
                 onCancelOrder={handleCancelOrder}
                 onOpenPayment={handleOpenPayment}
+                onFireNextCourse={handleFireNextCourse}
+                nextFireableCourse={courseStatus?.nextFireableCourse ?? null}
               />
               <Button
                 variant="outline"

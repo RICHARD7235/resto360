@@ -85,11 +85,13 @@ export async function resolveStationsForProducts(
 }
 
 /**
- * Creates preparation tickets for an order by splitting items by station.
+ * Creates preparation tickets for an order by splitting items by station AND course.
+ * Tickets for course 0 and the lowest non-zero course are FIRED immediately.
+ * Higher courses are HOLD (fired_at = null).
  */
 export async function createPreparationTickets(
   orderId: string,
-  items: { order_item_id: string; product_id: string | null }[],
+  items: { order_item_id: string; product_id: string | null; course_number: number }[],
   restaurantId: string
 ): Promise<void> {
   const supabase = await createClient();
@@ -98,42 +100,56 @@ export async function createPreparationTickets(
   const productIds = items.map((i) => i.product_id);
   const stationMap = await resolveStationsForProducts(productIds);
 
-  // Group items by station
-  const itemsByStation = new Map<string, string[]>();
-  const unassigned: string[] = [];
+  // Group items by (station, course)
+  const groups = new Map<string, { orderItemIds: string[]; course: number; stationId: string }>();
+  const unassigned: { order_item_id: string; course_number: number }[] = [];
 
   for (const item of items) {
     const stationId = item.product_id ? stationMap.get(item.product_id) ?? null : null;
     if (stationId) {
-      const existing = itemsByStation.get(stationId) ?? [];
-      existing.push(item.order_item_id);
-      itemsByStation.set(stationId, existing);
+      const key = `${stationId}::${item.course_number}`;
+      const group = groups.get(key) ?? { orderItemIds: [], course: item.course_number, stationId };
+      group.orderItemIds.push(item.order_item_id);
+      groups.set(key, group);
     } else {
-      unassigned.push(item.order_item_id);
+      unassigned.push(item);
     }
   }
 
-  // For unassigned items, assign to the default station
+  // Assign unassigned items to default station
   if (unassigned.length > 0) {
     const defaultStationId = await getDefaultStation(supabase, restaurantId);
-
     if (defaultStationId) {
-      const existing = itemsByStation.get(defaultStationId) ?? [];
-      existing.push(...unassigned);
-      itemsByStation.set(defaultStationId, existing);
+      for (const item of unassigned) {
+        const key = `${defaultStationId}::${item.course_number}`;
+        const group = groups.get(key) ?? { orderItemIds: [], course: item.course_number, stationId: defaultStationId };
+        group.orderItemIds.push(item.order_item_id);
+        groups.set(key, group);
+      }
     } else {
-      console.warn(`[KDS] No default station found for restaurant ${restaurantId}. ${unassigned.length} items unrouted.`);
+      console.warn(`[KDS] No default station for restaurant ${restaurantId}. ${unassigned.length} items unrouted.`);
     }
   }
 
+  // Determine which courses to fire immediately
+  const allCourses = [...new Set([...groups.values()].map((g) => g.course))];
+  const nonZeroCourses = allCourses.filter((c) => c > 0);
+  const minNonZero = nonZeroCourses.length > 0 ? Math.min(...nonZeroCourses) : null;
+
+  const now = new Date().toISOString();
+
   // Create tickets and link items
-  for (const [stationId, orderItemIds] of itemsByStation) {
+  for (const group of groups.values()) {
+    const shouldFire = group.course === 0 || group.course === minNonZero;
+
     const { data: ticket, error: ticketError } = await supabase
       .from("preparation_tickets")
       .insert({
         order_id: orderId,
-        station_id: stationId,
+        station_id: group.stationId,
         status: "pending",
+        course_number: group.course,
+        fired_at: shouldFire ? now : null,
       })
       .select()
       .single();
@@ -145,7 +161,7 @@ export async function createPreparationTickets(
     const { error: linkError } = await supabase
       .from("order_items")
       .update({ preparation_ticket_id: ticket.id })
-      .in("id", orderItemIds);
+      .in("id", group.orderItemIds);
 
     if (linkError) {
       throw new Error(`Erreur liaison items au ticket: ${linkError.message}`);
@@ -155,10 +171,11 @@ export async function createPreparationTickets(
 
 /**
  * Adds items to existing preparation tickets or creates new ones.
+ * Respects course grouping — items join tickets matching (station, course).
  */
 export async function addItemsToPreparationTickets(
   orderId: string,
-  items: { order_item_id: string; product_id: string | null }[],
+  items: { order_item_id: string; product_id: string | null; course_number: number }[],
   restaurantId: string
 ): Promise<void> {
   const supabase = await createClient();
@@ -170,64 +187,76 @@ export async function addItemsToPreparationTickets(
   // Get existing tickets for this order
   const { data: existingTickets } = await supabase
     .from("preparation_tickets")
-    .select("id, station_id, status")
+    .select("id, station_id, status, course_number")
     .eq("order_id", orderId);
 
-  const ticketByStation = new Map<string, { id: string; status: string }>();
+  const ticketByKey = new Map<string, { id: string; status: string }>();
   for (const t of existingTickets ?? []) {
-    ticketByStation.set(t.station_id, { id: t.id, status: t.status ?? "pending" });
+    const key = `${t.station_id}::${t.course_number ?? 1}`;
+    ticketByKey.set(key, { id: t.id, status: t.status ?? "pending" });
   }
 
-  // Group items by station
-  const itemsByStation = new Map<string, string[]>();
-  const unassigned: string[] = [];
+  // Group items by (station, course)
+  const groups = new Map<string, { orderItemIds: string[]; course: number; stationId: string }>();
+  const unassigned: { order_item_id: string; course_number: number }[] = [];
 
   for (const item of items) {
     const stationId = item.product_id ? stationMap.get(item.product_id) ?? null : null;
     if (stationId) {
-      const existing = itemsByStation.get(stationId) ?? [];
-      existing.push(item.order_item_id);
-      itemsByStation.set(stationId, existing);
+      const key = `${stationId}::${item.course_number}`;
+      const group = groups.get(key) ?? { orderItemIds: [], course: item.course_number, stationId };
+      group.orderItemIds.push(item.order_item_id);
+      groups.set(key, group);
     } else {
-      unassigned.push(item.order_item_id);
+      unassigned.push(item);
     }
   }
 
-  // Handle unassigned
   if (unassigned.length > 0) {
     const defaultStationId = await getDefaultStation(supabase, restaurantId);
-
     if (defaultStationId) {
-      const existing = itemsByStation.get(defaultStationId) ?? [];
-      existing.push(...unassigned);
-      itemsByStation.set(defaultStationId, existing);
+      for (const item of unassigned) {
+        const key = `${defaultStationId}::${item.course_number}`;
+        const group = groups.get(key) ?? { orderItemIds: [], course: item.course_number, stationId: defaultStationId };
+        group.orderItemIds.push(item.order_item_id);
+        groups.set(key, group);
+      }
     } else {
-      console.warn(`[KDS] No default station found for restaurant ${restaurantId}. ${unassigned.length} items unrouted.`);
+      console.warn(`[KDS] No default station for restaurant ${restaurantId}. ${unassigned.length} items unrouted.`);
     }
   }
 
-  // For each station, use existing ticket or create new
-  for (const [stationId, orderItemIds] of itemsByStation) {
-    const existingTicket = ticketByStation.get(stationId);
+  // For each group, use existing ticket or create new
+  for (const group of groups.values()) {
+    const key = `${group.stationId}::${group.course}`;
+    const existing = ticketByKey.get(key);
 
     let ticketId: string;
 
-    if (existingTicket && existingTicket.status !== "served") {
-      ticketId = existingTicket.id;
-      // Reset to in_progress if was ready
-      if (existingTicket.status === "ready") {
+    if (existing && existing.status !== "served") {
+      ticketId = existing.id;
+      if (existing.status === "ready") {
         await supabase
           .from("preparation_tickets")
           .update({ status: "in_progress", ready_at: null })
           .eq("id", ticketId);
       }
     } else {
+      // Determine if this new ticket should be fired
+      // Check if any existing ticket for this order has this course fired
+      const firedForCourse = (existingTickets ?? []).some(
+        (t) => (t.course_number ?? 1) === group.course && t.status !== "served"
+      );
+      const shouldFire = group.course === 0 || firedForCourse;
+
       const { data: ticket, error } = await supabase
         .from("preparation_tickets")
         .insert({
           order_id: orderId,
-          station_id: stationId,
+          station_id: group.stationId,
           status: "pending",
+          course_number: group.course,
+          fired_at: shouldFire ? new Date().toISOString() : null,
         })
         .select()
         .single();
@@ -241,7 +270,7 @@ export async function addItemsToPreparationTickets(
     const { error: linkError } = await supabase
       .from("order_items")
       .update({ preparation_ticket_id: ticketId })
-      .in("id", orderItemIds);
+      .in("id", group.orderItemIds);
 
     if (linkError) {
       throw new Error(`Erreur liaison items: ${linkError.message}`);
