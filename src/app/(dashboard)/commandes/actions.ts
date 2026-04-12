@@ -28,7 +28,11 @@ export type OrderStatus =
   | "paid"
   | "cancelled";
 
-export type OrderItemStatus = "pending" | "in_progress" | "ready" | "served";
+export type OrderItemStatus = "pending" | "in_progress" | "ready" | "served" | "cancelled";
+
+export type OrderType = "dine_in" | "takeaway" | "delivery";
+
+export type PaymentMethod = "cash" | "card" | "check" | "ticket_restaurant" | "other";
 
 export interface OrderFilters {
   status?: OrderStatus[];
@@ -65,6 +69,35 @@ export interface OrderStats {
   revenue: number;
   activeOrders: number;
   completedOrders: number;
+  breakdown: {
+    dine_in: { count: number; revenue: number };
+    takeaway: { count: number; revenue: number };
+    delivery: { count: number; revenue: number };
+  };
+}
+
+export interface OrderPayment {
+  id: string;
+  order_id: string;
+  amount: number;
+  method: PaymentMethod;
+  label: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface OrderCancellation {
+  id: string;
+  order_id: string;
+  order_item_id: string | null;
+  reason: string;
+  cancelled_by: string | null;
+  cancelled_at: string;
+  // Joined fields
+  table_number: string | null;
+  product_name: string | null;
+  cancelled_by_name: string | null;
+  order_type: string;
 }
 
 export type PreparationTicketStatus = "pending" | "in_progress" | "ready" | "served";
@@ -81,6 +114,9 @@ export interface PreparationTicketWithItems {
   created_at: string;
   table_number: string | null;
   order_notes: string | null;
+  order_type: OrderType;
+  customer_name: string | null;
+  delivery_address: string | null;
   items: {
     id: string;
     product_name: string;
@@ -114,6 +150,36 @@ async function getUserRestaurantId(): Promise<string> {
   }
 
   return profile.restaurant_id;
+}
+
+async function getUserContext(): Promise<{
+  userId: string;
+  restaurantId: string;
+  role: string;
+}> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/connexion");
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("restaurant_id, role")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile?.restaurant_id) {
+    throw new Error("Aucun restaurant associé à votre compte.");
+  }
+
+  return {
+    userId: user.id,
+    restaurantId: profile.restaurant_id,
+    role: (profile.role as string) ?? "staff",
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -290,9 +356,10 @@ export async function getOrderStats(date: string): Promise<OrderStats> {
   const restaurantId = await getUserRestaurantId();
   const supabase = await createClient();
 
-  const { data, error } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
     .from("orders")
-    .select("status, total")
+    .select("status, total, order_type")
     .eq("restaurant_id", restaurantId)
     .gte("created_at", date)
     .lt("created_at", `${date}T23:59:59.999Z`);
@@ -303,7 +370,8 @@ export async function getOrderStats(date: string): Promise<OrderStats> {
     );
   }
 
-  const rows = data ?? [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = (data ?? []) as { status: string | null; total: number | null; order_type: string }[];
 
   const activeStatuses: OrderStatus[] = ["sent", "preparing", "ready"];
   const completedStatuses: OrderStatus[] = ["served", "paid"];
@@ -312,14 +380,27 @@ export async function getOrderStats(date: string): Promise<OrderStats> {
   let activeOrders = 0;
   let completedOrders = 0;
 
+  const breakdown = {
+    dine_in: { count: 0, revenue: 0 },
+    takeaway: { count: 0, revenue: 0 },
+    delivery: { count: 0, revenue: 0 },
+  };
+
   for (const row of rows) {
     const status = (row.status ?? "draft") as OrderStatus;
-    revenue += row.total ?? 0;
+    const total = row.total ?? 0;
+    revenue += total;
 
     if (activeStatuses.includes(status)) {
       activeOrders++;
     } else if (completedStatuses.includes(status)) {
       completedOrders++;
+    }
+
+    const orderType = (row.order_type ?? "dine_in") as OrderType;
+    if (orderType in breakdown) {
+      breakdown[orderType].count++;
+      breakdown[orderType].revenue += total;
     }
   }
 
@@ -328,6 +409,7 @@ export async function getOrderStats(date: string): Promise<OrderStats> {
     revenue,
     activeOrders,
     completedOrders,
+    breakdown,
   };
 }
 
@@ -427,14 +509,24 @@ export async function getPreparationTickets(
 
   const today = new Date().toISOString().split("T")[0];
 
-  const { data: orders } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: rawOrders } = await (supabase as any)
     .from("orders")
-    .select("id, table_number, notes")
+    .select("id, table_number, notes, order_type, customer_name, delivery_address")
     .eq("restaurant_id", restaurantId)
     .gte("created_at", today)
     .in("status", ["sent", "preparing", "ready"]);
 
-  if (!orders || orders.length === 0) return [];
+  const orders = (rawOrders ?? []) as {
+    id: string;
+    table_number: string | null;
+    notes: string | null;
+    order_type: string;
+    customer_name: string | null;
+    delivery_address: string | null;
+  }[];
+
+  if (orders.length === 0) return [];
 
   const orderIds = orders.map((o) => o.id);
   const orderMap = new Map(orders.map((o) => [o.id, o]));
@@ -492,6 +584,9 @@ export async function getPreparationTickets(
       created_at: ticket.created_at ?? new Date().toISOString(),
       table_number: order?.table_number ?? null,
       order_notes: order?.notes ?? null,
+      order_type: (order?.order_type ?? "dine_in") as OrderType,
+      customer_name: order?.customer_name ?? null,
+      delivery_address: order?.delivery_address ?? null,
       items: (itemsByTicket.get(ticket.id) ?? []).map((item) => ({
         id: item.id,
         product_name: item.product_name,
@@ -576,12 +671,34 @@ export async function updatePreparationTicketStatus(
 // ---------------------------------------------------------------------------
 
 export async function createOrder(data: {
-  table_number: string;
+  table_number?: string;
   notes?: string;
   items: OrderItemInput[];
+  order_type?: OrderType;
+  customer_name?: string;
+  customer_phone?: string;
+  delivery_address?: string;
 }): Promise<OrderWithItems> {
   const restaurantId = await getUserRestaurantId();
   const supabase = await createClient();
+
+  const orderType = data.order_type ?? "dine_in";
+
+  // Validation based on order type
+  if (orderType === "takeaway" && !data.customer_name?.trim()) {
+    throw new Error("Le nom du client est requis pour une commande à emporter.");
+  }
+  if (orderType === "delivery") {
+    if (!data.customer_name?.trim()) {
+      throw new Error("Le nom du client est requis pour une livraison.");
+    }
+    if (!data.customer_phone?.trim()) {
+      throw new Error("Le téléphone est requis pour une livraison.");
+    }
+    if (!data.delivery_address?.trim()) {
+      throw new Error("L'adresse de livraison est requise.");
+    }
+  }
 
   // Calculate total server-side
   const total = data.items.reduce(
@@ -589,16 +706,25 @@ export async function createOrder(data: {
     0
   );
 
-  // Insert order
-  const { data: order, error: orderError } = await supabase
+  // Insert order with new fields
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const insertPayload: Record<string, unknown> = {
+    restaurant_id: restaurantId,
+    table_number: orderType === "dine_in" ? (data.table_number ?? null) : null,
+    notes: data.notes ?? null,
+    status: "sent",
+    total,
+    order_type: orderType,
+    customer_name: data.customer_name ?? null,
+    customer_phone: data.customer_phone ?? null,
+    delivery_address: data.delivery_address ?? null,
+    paid_amount: 0,
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: order, error: orderError } = await (supabase as any)
     .from("orders")
-    .insert({
-      restaurant_id: restaurantId,
-      table_number: data.table_number,
-      notes: data.notes ?? null,
-      status: "sent",
-      total,
-    })
+    .insert(insertPayload)
     .select()
     .single();
 
@@ -856,4 +982,372 @@ export async function deleteOrder(id: string): Promise<void> {
       `Erreur lors de la suppression de la commande : ${error.message}`
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// Cancellations
+// ---------------------------------------------------------------------------
+
+export async function cancelOrderItem(
+  itemId: string,
+  reason: string
+): Promise<void> {
+  const { userId, restaurantId } = await getUserContext();
+  const supabase = await createClient();
+
+  // Fetch item + verify restaurant ownership
+  const { data: item, error: fetchErr } = await supabase
+    .from("order_items")
+    .select("*")
+    .eq("id", itemId)
+    .single();
+
+  if (fetchErr || !item) {
+    throw new Error("Article non trouvé.");
+  }
+
+  const { data: order } = await supabase
+    .from("orders")
+    .select("id, restaurant_id, total")
+    .eq("id", item.order_id)
+    .single();
+
+  if (!order || order.restaurant_id !== restaurantId) {
+    throw new Error("Commande non trouvée.");
+  }
+
+  // Mark item as cancelled
+  const { error: updateErr } = await supabase
+    .from("order_items")
+    .update({ status: "cancelled" })
+    .eq("id", itemId);
+
+  if (updateErr) {
+    throw new Error(`Erreur annulation article : ${updateErr.message}`);
+  }
+
+  // Insert cancellation record
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (supabase as any).from("order_cancellations").insert({
+    order_id: item.order_id,
+    order_item_id: itemId,
+    restaurant_id: restaurantId,
+    reason,
+    cancelled_by: userId,
+  });
+
+  // Recalculate order total (excluding cancelled items)
+  const { data: activeItems } = await supabase
+    .from("order_items")
+    .select("quantity, unit_price, status")
+    .eq("order_id", item.order_id);
+
+  const newTotal = (activeItems ?? [])
+    .filter((i) => i.status !== "cancelled")
+    .reduce((sum, i) => sum + i.unit_price * i.quantity, 0);
+
+  await supabase
+    .from("orders")
+    .update({ total: newTotal, updated_at: new Date().toISOString() })
+    .eq("id", item.order_id);
+
+  // Clean preparation ticket: remove from ticket if item was on one
+  if (item.preparation_ticket_id) {
+    // Check if there are remaining non-cancelled items on this ticket
+    const { data: ticketItems } = await supabase
+      .from("order_items")
+      .select("id, status")
+      .eq("preparation_ticket_id", item.preparation_ticket_id);
+
+    const activeTicketItems = (ticketItems ?? []).filter(
+      (ti) => ti.status !== "cancelled"
+    );
+
+    if (activeTicketItems.length === 0) {
+      // All items cancelled — delete the ticket
+      await supabase
+        .from("preparation_tickets")
+        .delete()
+        .eq("id", item.preparation_ticket_id);
+    }
+  }
+}
+
+export async function cancelOrder(
+  orderId: string,
+  reason: string
+): Promise<void> {
+  const { userId, restaurantId, role } = await getUserContext();
+  const supabase = await createClient();
+
+  // Only owner/admin/manager can cancel entire orders
+  if (!["owner", "admin", "manager"].includes(role)) {
+    throw new Error("Seuls les responsables peuvent annuler une commande entière.");
+  }
+
+  // Verify order exists + belongs to restaurant
+  const { data: order } = await supabase
+    .from("orders")
+    .select("id, restaurant_id")
+    .eq("id", orderId)
+    .eq("restaurant_id", restaurantId)
+    .single();
+
+  if (!order) {
+    throw new Error("Commande non trouvée.");
+  }
+
+  // Cancel all non-cancelled items
+  const { data: items } = await supabase
+    .from("order_items")
+    .select("id, preparation_ticket_id")
+    .eq("order_id", orderId)
+    .neq("status", "cancelled");
+
+  if (items && items.length > 0) {
+    await supabase
+      .from("order_items")
+      .update({ status: "cancelled" })
+      .eq("order_id", orderId)
+      .neq("status", "cancelled");
+  }
+
+  // Insert cancellation record (order-level, no item_id)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (supabase as any).from("order_cancellations").insert({
+    order_id: orderId,
+    order_item_id: null,
+    restaurant_id: restaurantId,
+    reason,
+    cancelled_by: userId,
+  });
+
+  // Cancel the order itself
+  await supabase
+    .from("orders")
+    .update({
+      status: "cancelled",
+      total: 0,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", orderId);
+
+  // Delete all preparation tickets for this order
+  const ticketIds = [
+    ...new Set(
+      (items ?? [])
+        .map((i) => i.preparation_ticket_id)
+        .filter((id): id is string => id !== null)
+    ),
+  ];
+  if (ticketIds.length > 0) {
+    await supabase
+      .from("preparation_tickets")
+      .delete()
+      .in("id", ticketIds);
+  }
+}
+
+export async function getCancellations(): Promise<OrderCancellation[]> {
+  const restaurantId = await getUserRestaurantId();
+  const supabase = await createClient();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: cancellations, error } = await (supabase as any)
+    .from("order_cancellations")
+    .select("*")
+    .eq("restaurant_id", restaurantId)
+    .order("cancelled_at", { ascending: false })
+    .limit(200);
+
+  if (error) {
+    throw new Error(`Erreur chargement annulations : ${error.message}`);
+  }
+
+  if (!cancellations || cancellations.length === 0) return [];
+
+  // Fetch related data
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = cancellations as any[];
+  const orderIds = [...new Set(rows.map((c: { order_id: string }) => c.order_id))];
+  const itemIds = rows
+    .map((c: { order_item_id: string | null }) => c.order_item_id)
+    .filter((id: string | null): id is string => id !== null);
+  const userIds = rows
+    .map((c: { cancelled_by: string | null }) => c.cancelled_by)
+    .filter((id: string | null): id is string => id !== null);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [ordersRes, itemsRes, profilesRes] = await Promise.all([
+    (supabase as any)
+      .from("orders")
+      .select("id, table_number, order_type")
+      .in("id", orderIds),
+    itemIds.length > 0
+      ? supabase.from("order_items").select("id, product_name").in("id", itemIds)
+      : Promise.resolve({ data: [] }),
+    userIds.length > 0
+      ? supabase.from("profiles").select("id, first_name, last_name").in("id", userIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const orderMap = new Map(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((ordersRes.data ?? []) as any[]).map((o: any) => [o.id, o])
+  );
+  const itemMap = new Map(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((itemsRes.data ?? []) as any[]).map((i: any) => [i.id, i])
+  );
+  const profileMap = new Map(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((profilesRes.data ?? []) as any[]).map((p: any) => [
+      p.id,
+      [p.first_name, p.last_name].filter(Boolean).join(" ") || "Inconnu",
+    ])
+  );
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return rows.map((c: any) => {
+    const order = orderMap.get(c.order_id);
+    const item = c.order_item_id ? itemMap.get(c.order_item_id) : null;
+    return {
+      id: c.id,
+      order_id: c.order_id,
+      order_item_id: c.order_item_id,
+      reason: c.reason,
+      cancelled_by: c.cancelled_by,
+      cancelled_at: c.cancelled_at,
+      table_number: order?.table_number ?? null,
+      product_name: item?.product_name ?? null,
+      cancelled_by_name: c.cancelled_by ? profileMap.get(c.cancelled_by) ?? null : null,
+      order_type: order?.order_type ?? "dine_in",
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Payments
+// ---------------------------------------------------------------------------
+
+export async function createPayment(
+  orderId: string,
+  data: {
+    amount: number;
+    method: PaymentMethod;
+    label?: string;
+    itemIds?: string[];
+  }
+): Promise<void> {
+  const { userId, restaurantId } = await getUserContext();
+  const supabase = await createClient();
+
+  // Verify order
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: order } = await (supabase as any)
+    .from("orders")
+    .select("id, restaurant_id, total, paid_amount, status")
+    .eq("id", orderId)
+    .eq("restaurant_id", restaurantId)
+    .single();
+
+  if (!order) {
+    throw new Error("Commande non trouvée.");
+  }
+
+  if (data.amount <= 0) {
+    throw new Error("Le montant doit être supérieur à 0.");
+  }
+
+  // Insert payment
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: payment, error: payErr } = await (supabase as any)
+    .from("order_payments")
+    .insert({
+      order_id: orderId,
+      restaurant_id: restaurantId,
+      amount: data.amount,
+      method: data.method,
+      label: data.label ?? null,
+      created_by: userId,
+    })
+    .select("id")
+    .single();
+
+  if (payErr) {
+    throw new Error(`Erreur création paiement : ${payErr.message}`);
+  }
+
+  // Mark items as paid if itemIds provided
+  if (data.itemIds && data.itemIds.length > 0 && payment) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any)
+      .from("order_items")
+      .update({ payment_id: payment.id })
+      .in("id", data.itemIds)
+      .eq("order_id", orderId);
+  }
+
+  // Update paid_amount on order
+  const newPaidAmount = (order.paid_amount ?? 0) + data.amount;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const updatePayload: Record<string, unknown> = {
+    paid_amount: newPaidAmount,
+    updated_at: new Date().toISOString(),
+  };
+
+  // If fully paid, mark order as paid
+  if (newPaidAmount >= (order.total ?? 0)) {
+    updatePayload.status = "paid";
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (supabase as any)
+    .from("orders")
+    .update(updatePayload)
+    .eq("id", orderId);
+}
+
+export async function getOrderPayments(
+  orderId: string
+): Promise<OrderPayment[]> {
+  const restaurantId = await getUserRestaurantId();
+  const supabase = await createClient();
+
+  // Verify order belongs to restaurant
+  const { data: order } = await supabase
+    .from("orders")
+    .select("id, restaurant_id")
+    .eq("id", orderId)
+    .eq("restaurant_id", restaurantId)
+    .single();
+
+  if (!order) {
+    throw new Error("Commande non trouvée.");
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("order_payments")
+    .select("*")
+    .eq("order_id", orderId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw new Error(`Erreur chargement paiements : ${error.message}`);
+  }
+
+  return (data ?? []).map(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (p: any) => ({
+      id: p.id,
+      order_id: p.order_id,
+      amount: p.amount,
+      method: p.method,
+      label: p.label,
+      created_by: p.created_by,
+      created_at: p.created_at,
+    })
+  );
 }

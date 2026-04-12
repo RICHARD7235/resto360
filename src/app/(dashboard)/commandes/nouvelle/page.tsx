@@ -2,12 +2,15 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ClipboardList } from "lucide-react";
+import { ArrowLeft, ClipboardList, Store, ShoppingBag, Truck } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { useCommandesStore } from "@/stores/commandes.store";
 import { CategoryTabs } from "@/components/modules/commandes/category-tabs";
 import { ProductGrid } from "@/components/modules/commandes/product-grid";
@@ -54,6 +57,14 @@ function NouvelleCommandeContent() {
     removeMenuFromCart,
     updateCartQuantity,
     clearCart,
+    orderType,
+    setOrderType,
+    customerName,
+    setCustomerName,
+    customerPhone,
+    setCustomerPhone,
+    deliveryAddress,
+    setDeliveryAddress,
   } = useCommandesStore();
 
   const [categories, setCategories] = useState<Category[]>([]);
@@ -178,8 +189,12 @@ function NouvelleCommandeContent() {
         await addItemsToOrder(existingOrderId, mappedItems);
       } else {
         await createOrder({
-          table_number: tableNumber,
+          table_number: orderType === "dine_in" ? tableNumber : undefined,
           items: mappedItems,
+          order_type: orderType,
+          customer_name: customerName || undefined,
+          customer_phone: customerPhone || undefined,
+          delivery_address: deliveryAddress || undefined,
         });
       }
       clearCart();
@@ -204,6 +219,18 @@ function NouvelleCommandeContent() {
     );
   }
 
+  const orderTypeConfig = {
+    dine_in: { label: "Sur place", icon: Store },
+    takeaway: { label: "A emporter", icon: ShoppingBag },
+    delivery: { label: "Livraison", icon: Truck },
+  } as const;
+
+  const pageTitle = isAddMode
+    ? `Ajouter a la commande — Table ${tableNumber}`
+    : orderType === "dine_in"
+      ? `Nouvelle commande — Table ${tableNumber}`
+      : `Nouvelle commande — ${orderTypeConfig[orderType].label}`;
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -218,13 +245,85 @@ function NouvelleCommandeContent() {
         </Button>
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
-            {isAddMode ? `Ajouter à la commande — Table ${tableNumber}` : `Nouvelle commande — Table ${tableNumber}`}
+            {pageTitle}
           </h1>
           <p className="text-muted-foreground">
             Sélectionnez les produits à ajouter
           </p>
         </div>
       </div>
+
+      {/* Order type selector (only for new orders) */}
+      {!isAddMode && (
+        <Card>
+          <CardContent className="p-4 space-y-4">
+            <div className="flex gap-2">
+              {(Object.entries(orderTypeConfig) as [keyof typeof orderTypeConfig, typeof orderTypeConfig[keyof typeof orderTypeConfig]][]).map(
+                ([type, config]) => {
+                  const Icon = config.icon;
+                  return (
+                    <Button
+                      key={type}
+                      variant={orderType === type ? "default" : "outline"}
+                      className="min-h-11 flex-1 gap-2"
+                      onClick={() => setOrderType(type)}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {config.label}
+                    </Button>
+                  );
+                }
+              )}
+            </div>
+
+            {/* Conditional fields */}
+            {orderType !== "dine_in" && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="customer-name">
+                    Nom du client {orderType === "delivery" ? "*" : ""}
+                  </Label>
+                  <Input
+                    id="customer-name"
+                    placeholder="Nom du client"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    className="min-h-11"
+                  />
+                </div>
+
+                {orderType === "delivery" && (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="customer-phone">Telephone *</Label>
+                      <Input
+                        id="customer-phone"
+                        placeholder="06 12 34 56 78"
+                        type="tel"
+                        value={customerPhone}
+                        onChange={(e) => setCustomerPhone(e.target.value)}
+                        className="min-h-11"
+                      />
+                    </div>
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <Label htmlFor="delivery-address">
+                        Adresse de livraison *
+                      </Label>
+                      <Textarea
+                        id="delivery-address"
+                        placeholder="Adresse complète"
+                        value={deliveryAddress}
+                        onChange={(e) => setDeliveryAddress(e.target.value)}
+                        className="min-h-[44px]"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Main layout */}
       <div className="grid gap-4 lg:grid-cols-3">
