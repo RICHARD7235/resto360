@@ -103,8 +103,9 @@ export function OrderSummary({
   const paymentProgress = order.total > 0 ? Math.min(100, (paidAmount / order.total) * 100) : 0;
   const isFullyPaid = paidAmount >= order.total;
 
+  // Allow payment at any active status (takeaway pays upfront, dine-in after service)
   const canPay =
-    ["ready", "served", "paid"].includes(order.status) && !isFullyPaid;
+    ["sent", "preparing", "ready", "served", "paid"].includes(order.status) && !isFullyPaid;
   const canCancel = !["paid", "cancelled"].includes(order.status);
 
   const activeItems = order.items.filter((i) => i.status !== "cancelled");

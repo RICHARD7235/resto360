@@ -1543,71 +1543,21 @@ export async function createPayment(
     throw new Error("Commande non trouvée.");
   }
 
-  // Guard: commande déjà entièrement réglée
-  if (order.status === "paid") {
-    throw new Error("Cette commande est déjà entièrement réglée.");
-  }
-
-  if (data.amount <= 0) {
-    throw new Error("Le montant doit être supérieur à 0.");
-  }
-
-  // P0-1: Guard against overpayment
-  const currentPaid = order.paid_amount ?? 0;
-  const remaining = (order.total ?? 0) - currentPaid;
-  if (data.amount > remaining + 0.01) {
-    throw new Error(
-      `Montant trop élevé. Reste à payer : ${remaining.toFixed(2)} €.`
-    );
-  }
-
-  // Insert payment
+  // Atomic payment via RPC (SELECT FOR UPDATE prevents race conditions)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: payment, error: payErr } = await (supabase as any)
-    .from("order_payments")
-    .insert({
-      order_id: orderId,
-      amount: data.amount,
-      method: data.method,
-      label: data.label ?? null,
-      created_by: userId,
-    })
-    .select("id")
-    .single();
+  const { error: rpcErr } = await (supabase as any).rpc("create_payment_safe", {
+    p_order_id: orderId,
+    p_restaurant_id: restaurantId,
+    p_amount: data.amount,
+    p_method: data.method,
+    p_label: data.label ?? null,
+    p_created_by: userId,
+    p_item_ids: data.itemIds ?? null,
+  });
 
-  if (payErr) {
-    throw new Error(`Erreur création paiement : ${payErr.message}`);
+  if (rpcErr) {
+    throw new Error(`Erreur création paiement : ${rpcErr.message}`);
   }
-
-  // Mark items as paid if itemIds provided
-  if (data.itemIds && data.itemIds.length > 0 && payment) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any)
-      .from("order_items")
-      .update({ payment_id: payment.id })
-      .in("id", data.itemIds)
-      .eq("order_id", orderId);
-  }
-
-  // Update paid_amount on order
-  const newPaidAmount = (order.paid_amount ?? 0) + data.amount;
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const updatePayload: Record<string, unknown> = {
-    paid_amount: newPaidAmount,
-    updated_at: new Date().toISOString(),
-  };
-
-  // If fully paid, mark order as paid
-  if (newPaidAmount >= (order.total ?? 0)) {
-    updatePayload.status = "paid";
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (supabase as any)
-    .from("orders")
-    .update(updatePayload)
-    .eq("id", orderId);
 }
 
 export async function getOrderPayments(
