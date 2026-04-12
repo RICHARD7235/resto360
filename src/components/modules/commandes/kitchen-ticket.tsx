@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Check, Clock, AlertTriangle } from "lucide-react";
+import { Check, Clock, AlertTriangle, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Card,
@@ -47,6 +47,7 @@ interface KitchenTicketProps {
   onItemStatusChange: (itemId: string, status: string) => void;
   onTicketStatusChange: (ticketId: string, status: string) => void;
   showStationBadge?: boolean;
+  dragHandleProps?: Record<string, unknown>;
 }
 
 // ---------------------------------------------------------------------------
@@ -88,6 +89,7 @@ export function KitchenTicket({
   onItemStatusChange,
   onTicketStatusChange,
   showStationBadge = false,
+  dragHandleProps,
 }: KitchenTicketProps) {
   const [elapsedMinutes, setElapsedMinutes] = useState(() =>
     getElapsedMinutes(ticket.created_at)
@@ -156,7 +158,15 @@ export function KitchenTicket({
       <CardHeader
         className={cn("-mt-4 rounded-t-xl px-4 py-3", statusConfig.bg, statusConfig.text)}
       >
-        <CardTitle className={cn("text-lg font-bold", statusConfig.text)}>
+        <CardTitle className={cn("flex items-center gap-1 text-lg font-bold", statusConfig.text)}>
+          {dragHandleProps && (
+            <span
+              className="cursor-grab touch-none active:cursor-grabbing"
+              {...dragHandleProps}
+            >
+              <GripVertical className="size-5" />
+            </span>
+          )}
           {ticketTitle}
         </CardTitle>
         <CardAction>
