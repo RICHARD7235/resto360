@@ -19,6 +19,13 @@ async function createUntypedClient(): Promise<UntypedClient> {
   return (await createClient()) as unknown as UntypedClient;
 }
 
+// P1-8: Use local France timezone to avoid UTC date boundary issues
+// (e.g. 00:30 CEST = 22:30 UTC the day before)
+function getTodayDateString(): string {
+  return new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" });
+  // sv-SE locale returns YYYY-MM-DD format
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -51,6 +58,8 @@ export interface OrderFilters {
   dateTo?: string;
 }
 
+// P1-9: order_type, paid_amount, customer_name, payment_id etc.
+// are already in generated types (Tables<"orders"> / Tables<"order_items">).
 export interface OrderWithItems extends OrderRow {
   order_items: OrderItemRow[];
 }
@@ -288,7 +297,7 @@ export async function getActiveOrders(): Promise<OrderWithItems[]> {
   const restaurantId = await getUserRestaurantId();
   const supabase = await createClient();
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = getTodayDateString();
 
   const { data: orders, error } = await supabase
     .from("orders")
@@ -497,7 +506,7 @@ export async function getTodayReservationsForFloorPlan(): Promise<FloorPlanReser
   const restaurantId = await getUserRestaurantId();
   const supabase = await createClient();
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = getTodayDateString();
 
   const { data, error } = await supabase
     .from("reservations")
@@ -526,7 +535,7 @@ export async function getPreparationTickets(
   const restaurantId = await getUserRestaurantId();
   const supabase = await createClient();
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = getTodayDateString();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: rawOrders } = await (supabase as any)
@@ -1435,7 +1444,11 @@ export async function getRestaurantTables(): Promise<RestaurantTable[]> {
 export async function upsertRestaurantTables(
   tables: Omit<RestaurantTable, "restaurant_id" | "created_at" | "updated_at" | "is_active">[]
 ): Promise<void> {
-  const restaurantId = await getUserRestaurantId();
+  // P1-6: Only owner/admin can modify floor plan
+  const { restaurantId, role } = await getUserContext();
+  if (!["owner", "admin"].includes(role)) {
+    throw new Error("Seuls les administrateurs peuvent modifier le plan de salle.");
+  }
   const supabase = await createUntypedClient();
 
   const now = new Date().toISOString();
@@ -1465,7 +1478,11 @@ export async function upsertRestaurantTables(
 }
 
 export async function deleteRestaurantTable(tableId: string): Promise<void> {
-  const restaurantId = await getUserRestaurantId();
+  // P1-6: Only owner/admin can delete tables
+  const { restaurantId, role } = await getUserContext();
+  if (!["owner", "admin"].includes(role)) {
+    throw new Error("Seuls les administrateurs peuvent supprimer des tables.");
+  }
   const supabase = await createUntypedClient();
 
   const { error } = await supabase

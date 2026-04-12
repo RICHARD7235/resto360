@@ -297,18 +297,20 @@ export default function CommandesPage() {
     onUpdate: fetchData,
   });
 
+  // P1-7: order_items & preparation_tickets lack restaurant_id column,
+  // so Realtime cannot filter by tenant. The fetchData callback filters
+  // server-side via getUserRestaurantId(). In high-traffic multi-tenant
+  // scenarios, consider adding restaurant_id to these tables.
   useRealtimeSubscription({
     channel: "order-items-rt",
     table: "order_items",
     onUpdate: fetchData,
-    // No direct restaurant_id filter — filtered via server action
   });
 
   useRealtimeSubscription({
     channel: "prep-tickets-rt",
     table: "preparation_tickets",
     onUpdate: fetchData,
-    // No direct restaurant_id filter — filtered via server action
   });
 
   useRealtimeSubscription({
@@ -518,20 +520,16 @@ export default function CommandesPage() {
                   total: selectedOrder.total ?? 0,
                   notes: selectedOrder.notes,
                   created_at: selectedOrder.created_at ?? new Date().toISOString(),
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  order_type: (selectedOrder as any).order_type ?? "dine_in",
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  paid_amount: (selectedOrder as any).paid_amount ?? 0,
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  customer_name: (selectedOrder as any).customer_name ?? null,
+                  order_type: selectedOrder.order_type ?? "dine_in",
+                  paid_amount: selectedOrder.paid_amount ?? 0,
+                  customer_name: selectedOrder.customer_name ?? null,
                   items: selectedOrder.order_items.map((item) => ({
                     id: item.id,
                     product_name: item.product_name,
                     quantity: item.quantity,
                     unit_price: item.unit_price,
                     status: item.status ?? "pending",
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    payment_id: (item as any).payment_id ?? null,
+                    payment_id: item.payment_id ?? null,
                   })),
                 }}
                 onViewDetail={() => {}}
@@ -617,8 +615,7 @@ export default function CommandesPage() {
             order={{
               id: payOrder.id,
               total: payOrder.total ?? 0,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              paid_amount: (payOrder as any).paid_amount ?? 0,
+              paid_amount: payOrder.paid_amount ?? 0,
               items: payOrder.order_items
                 .filter((i) => i.status !== "cancelled")
                 .map((item) => ({
@@ -626,8 +623,7 @@ export default function CommandesPage() {
                   product_name: item.product_name,
                   quantity: item.quantity,
                   unit_price: item.unit_price,
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  payment_id: (item as any).payment_id ?? null,
+                  payment_id: item.payment_id ?? null,
                 })),
             }}
             onPaymentComplete={async () => {
