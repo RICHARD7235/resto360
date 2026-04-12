@@ -44,11 +44,8 @@ export default async function ResultatPage({ searchParams }: Props) {
     .map((s) => ({ snap: s, norm: normalizePeriod(s.period) }))
     .sort((a, b) => a.norm.localeCompare(b.norm));
 
-  // Default: last period <= march 2026
-  const REFERENCE = "2026-03-01";
-  const defaultSnap =
-    [...normalized].reverse().find((e) => e.norm <= REFERENCE) ??
-    normalized[normalized.length - 1];
+  // Default: most recent available period
+  const defaultSnap = normalized[normalized.length - 1];
 
   const selectedNorm = periodParam
     ? normalizePeriod(periodParam)

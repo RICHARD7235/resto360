@@ -22,13 +22,18 @@ const MONTH_LABELS = [
 export default async function Page() {
   const snapshots = await getAllSnapshots();
 
+  const currentYear = new Date().getFullYear();
+  const previousYear = currentYear - 1;
+  const nowMonth = new Date().getMonth(); // 0-indexed: Jan=0
+  // Use end of previous month as cutoff for "realised" data
+  const cutoff = `${currentYear}-${String(nowMonth).padStart(2, "0")}-01`;
+
   const year2026 = snapshots
-    .filter((s) => s.period.startsWith("2026-"))
+    .filter((s) => s.period.startsWith(`${currentYear}-`))
     .sort((a, b) => a.period.localeCompare(b.period));
 
-  // Démo 2026-04-07 : on fige le YTD à fin mars (jan / fév / mars réalisés)
-  // pour un rendu plus crédible qu'un mois d'avril en cours.
-  const realisedMonths = year2026.filter((s) => s.period <= "2026-03-01");
+  // YTD : mois terminés (avant le mois en cours)
+  const realisedMonths = year2026.filter((s) => s.period <= cutoff);
   const currentMonth = realisedMonths.length;
 
   const sum = (arr: AccountingSnapshot[], k: keyof AccountingSnapshot) =>
@@ -42,8 +47,8 @@ export default async function Page() {
   );
 
   // Répartition approximative du budget charges sur les 3 lignes,
-  // au prorata de la moyenne 2025 (année précédente complète).
-  const year2025 = snapshots.filter((s) => s.period.startsWith("2025-"));
+  // au prorata de l'année précédente complète.
+  const year2025 = snapshots.filter((s) => s.period.startsWith(`${previousYear}-`));
   const cv2025 = sum(year2025, "charges_variables");
   const ms2025 = sum(year2025, "masse_salariale");
   const cf2025 = sum(year2025, "charges_fixes");
@@ -95,13 +100,13 @@ export default async function Page() {
         <div>
           <h1 className="text-2xl font-bold">Prévisionnel & Budget</h1>
           <p className="text-sm text-muted-foreground">
-            Suivi budget vs réalisé — année {2026}
+            Suivi budget vs réalisé — année {currentYear}
           </p>
         </div>
         <Badge variant="secondary">Prévisionnel simplifié v1</Badge>
       </div>
 
-      <YearProgress year={2026} currentMonth={currentMonth} />
+      <YearProgress year={currentYear} currentMonth={currentMonth} />
 
       <BudgetCumulChart data={chartData} />
 

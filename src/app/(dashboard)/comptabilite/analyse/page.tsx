@@ -57,8 +57,10 @@ function average(snaps: AccountingSnapshot[], key: KpiKey): number {
 
 export default async function Page() {
   const snapshots = await getAllSnapshots();
-  const year2025 = snapshots.filter((s) => s.period.startsWith("2025-"));
-  const year2024 = snapshots.filter((s) => s.period.startsWith("2024-"));
+  const currentYear = new Date().getFullYear();
+  const previousYear = currentYear - 1;
+  const year2025 = snapshots.filter((s) => s.period.startsWith(`${currentYear}-`));
+  const year2024 = snapshots.filter((s) => s.period.startsWith(`${previousYear}-`));
 
   const rows = CHARTS.map((c) => ({
     key: c.key,
@@ -72,7 +74,7 @@ export default async function Page() {
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-[#2D3436]">Analyse comparative</h1>
-        <p className="text-sm text-muted-foreground">2025 vs 2024</p>
+        <p className="text-sm text-muted-foreground">{currentYear} vs {previousYear}</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

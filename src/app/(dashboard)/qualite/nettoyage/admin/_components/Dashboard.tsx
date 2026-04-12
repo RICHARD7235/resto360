@@ -10,11 +10,12 @@ import type {
 
 interface Props {
   restaurantId: string;
+  restaurantNom: string;
   todayInstances: QhsTaskInstanceWithContext[];
   ncs: QhsNonConformity[];
 }
 
-export function Dashboard({ todayInstances, ncs }: Props) {
+export function Dashboard({ restaurantNom, todayInstances, ncs }: Props) {
   const total = todayInstances.length;
   const validees = todayInstances.filter((i) => i.statut === "validee").length;
   const taux = total === 0 ? 100 : Math.round((validees / total) * 100);
@@ -31,7 +32,7 @@ export function Dashboard({ todayInstances, ncs }: Props) {
 
   const exportPdf = async () => {
     const blob = await generateAuditPdf({
-      restaurantNom: "La Cabane qui Fume",
+      restaurantNom,
       periodeDebut: new Date(Date.now() - 30 * 86_400_000)
         .toISOString()
         .slice(0, 10),

@@ -11,6 +11,7 @@ import {
   fetchInstancesForDay,
 } from "@/lib/supabase/qhs/queries";
 import { getUserRestaurantId } from "@/lib/qhs/auth";
+import { RESTAURANT_NAME } from "@/lib/config/restaurant";
 import { TemplatesTable } from "./_components/TemplatesTable";
 import { NonConformitiesTable } from "./_components/NonConformitiesTable";
 import { Dashboard } from "./_components/Dashboard";
@@ -50,6 +51,7 @@ export default async function AdminPage() {
         <TabsContent value="dashboard" className="mt-6">
           <Dashboard
             restaurantId={restaurantId}
+            restaurantNom={RESTAURANT_NAME}
             todayInstances={todayInstances}
             ncs={ncs}
           />

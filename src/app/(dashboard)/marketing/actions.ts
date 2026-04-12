@@ -95,24 +95,16 @@ export async function updateCampaign(
 export async function markCampaignSent(id: string) {
   const { restaurantId } = await requireActionPermission("m10_marketing", "write");
   const supabase = await untyped();
-  // Simulation : passage en "sent" avec stats factices mais cohérentes
-  const { data: c } = await supabase
-    .from("marketing_campaigns")
-    .select("recipients_count")
-    .eq("id", id)
-    .eq("restaurant_id", restaurantId)
-    .single();
-  const recipients = Math.max(50, (c?.recipients_count as number) || 200);
-  const opens = Math.round(recipients * (0.35 + Math.random() * 0.25));
-  const clicks = Math.round(opens * (0.15 + Math.random() * 0.15));
+  // TODO: Intégrer un vrai provider d'envoi (Brevo, Mailjet…) pour obtenir
+  // les stats réelles (opens, clicks). En attendant on passe en "sent"
+  // avec opens/clicks à 0 — les vraies stats seront remplies par webhook.
   const { error } = await supabase
     .from("marketing_campaigns")
     .update({
       status: "sent",
       sent_at: new Date().toISOString(),
-      recipients_count: recipients,
-      opens_count: opens,
-      clicks_count: clicks,
+      opens_count: 0,
+      clicks_count: 0,
     })
     .eq("id", id)
     .eq("restaurant_id", restaurantId);
