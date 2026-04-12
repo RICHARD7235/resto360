@@ -4,6 +4,7 @@
 
 import { createHash } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
+import { requirePermission } from "@/lib/rbac";
 import type { QhsTaskTemplate } from "./types";
 
 const hashPin = (pin: string) =>
@@ -109,27 +110,21 @@ export async function closeNonConformity(
     .maybeSingle();
   if (!nc) return { ok: false, error: "Non-conformité introuvable" };
 
+  // Vérifie que l'utilisateur connecté a la permission write sur m13_qualite
+  await requirePermission("m13_qualite", "write");
+
   const pinHash = hashPin(pin);
   const { data: perso } = await (supabase as any)
     .from("staff_members")
-    .select("id, pin_hash, role")
+    .select("id, pin_hash")
     .eq("restaurant_id", (nc as { restaurant_id: string }).restaurant_id)
     .eq("is_active", true);
 
-  // Whitelist élargie : rôles admin/manager LCQF (texte libre, non normalisé)
-  // TODO post-démo : RBAC propre avec table roles + permissions
-  const ADMIN_ROLES = [
-    "manager",
-    "admin",
-    "Gérant",
-    "Adjointe de direction",
-  ];
   const matched = (perso ?? []).find(
-    (p: { pin_hash: string | null; role: string }) =>
-      p.pin_hash === pinHash && ADMIN_ROLES.includes(p.role),
+    (p: { pin_hash: string | null }) => p.pin_hash === pinHash,
   );
   if (!matched)
-    return { ok: false, error: "PIN invalide ou rôle insuffisant" };
+    return { ok: false, error: "PIN invalide" };
 
   const { error } = await (supabase as any)
     .from("qhs_nonconformities")

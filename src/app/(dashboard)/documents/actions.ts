@@ -5,7 +5,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { requireQhsAdmin } from "@/lib/qhs/auth";
+import { requirePermission } from "@/lib/rbac";
 import {
   uploadDocumentFile,
   deleteDocumentFiles,
@@ -25,7 +25,7 @@ export async function triggerExpirationCheck(): Promise<{
   error?: string;
 }> {
   try {
-    await requireQhsAdmin();
+    await requirePermission("m12_documents", "write");
     const supabase = await createClient();
     const { data, error } = await supabase.functions.invoke(
       "documents-check-expirations",
@@ -49,7 +49,7 @@ export async function createDocument(
   formData: FormData
 ): Promise<{ ok: boolean; error?: string; id?: string }> {
   try {
-    const { restaurantId } = await requireQhsAdmin();
+    const { restaurantId } = await requirePermission("m12_documents", "write");
     const supabase = await untyped();
 
     const title = String(formData.get("title") ?? "").trim();
@@ -141,7 +141,7 @@ export async function addVersion(
   formData: FormData
 ): Promise<{ ok: boolean; error?: string; versionId?: string }> {
   try {
-    const { restaurantId } = await requireQhsAdmin();
+    const { restaurantId } = await requirePermission("m12_documents", "write");
     const supabase = await untyped();
 
     const file = formData.get("file");
@@ -228,7 +228,7 @@ export async function updateDocument(
   }
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    await requireQhsAdmin();
+    await requirePermission("m12_documents", "write");
     const supabase = await untyped();
     const { error } = await supabase
       .from("documents")
@@ -249,7 +249,7 @@ export async function deleteDocument(
   id: string
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    await requireQhsAdmin();
+    await requirePermission("m12_documents", "write");
     const supabase = await untyped();
 
     // 1. SELECT all versions
@@ -345,7 +345,7 @@ export async function seedRegistersIfMissing(
   restaurantId: string
 ): Promise<{ ok: boolean; created: number; error?: string }> {
   try {
-    await requireQhsAdmin();
+    await requirePermission("m12_documents", "write");
     const supabase = await untyped();
     const { data: existing, error: selErr } = await supabase
       .from("legal_registers")
@@ -378,7 +378,7 @@ export async function getDownloadUrl(
   versionId: string
 ): Promise<{ ok: boolean; url?: string; error?: string }> {
   try {
-    await requireQhsAdmin();
+    await requirePermission("m12_documents", "write");
     const supabase = await untyped();
     const { data, error } = await supabase
       .from("document_versions")

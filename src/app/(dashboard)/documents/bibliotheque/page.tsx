@@ -1,9 +1,9 @@
-import { requireQhsAdmin } from "@/lib/qhs/auth";
+import { requirePermission } from "@/lib/rbac";
 import { getCategories, getDocumentsWithStatus } from "@/lib/documents/queries";
 import { BibliothequeClient } from "./_bibliotheque-client";
 
 export default async function BibliothequePage() {
-  const { restaurantId } = await requireQhsAdmin();
+  const { restaurantId } = await requirePermission("m12_documents", "read");
   const [categories, documents] = await Promise.all([
     getCategories(),
     getDocumentsWithStatus(restaurantId),

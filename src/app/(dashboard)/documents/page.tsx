@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { Library, CalendarDays, BookMarked, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { requireQhsAdmin } from "@/lib/qhs/auth";
+import { requirePermission } from "@/lib/rbac";
 import { getKpis, getExpiringSoon } from "@/lib/documents/queries";
 import { KpiCards } from "./_components/kpi-cards";
 import { AlertsList } from "./_components/alerts-list";
 import { triggerExpirationCheck } from "./actions";
 
 export default async function DocumentsPage() {
-  const { restaurantId } = await requireQhsAdmin();
+  const { restaurantId } = await requirePermission("m12_documents", "read");
   const [kpis, expiring] = await Promise.all([
     getKpis(restaurantId),
     getExpiringSoon(restaurantId, 90),

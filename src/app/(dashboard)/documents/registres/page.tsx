@@ -1,10 +1,10 @@
-import { requireQhsAdmin } from "@/lib/qhs/auth";
+import { requirePermission } from "@/lib/rbac";
 import { getRegisters } from "@/lib/documents/queries";
 import { seedRegistersIfMissing } from "../actions";
 import { RegisterCard } from "../_components/register-card";
 
 export default async function RegistresPage() {
-  const { restaurantId } = await requireQhsAdmin();
+  const { restaurantId } = await requirePermission("m12_documents", "read");
   await seedRegistersIfMissing(restaurantId);
   const registers = await getRegisters(restaurantId);
 

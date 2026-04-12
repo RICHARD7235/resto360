@@ -1,13 +1,12 @@
 // Garde de rôle pour toutes les pages M12 Documents & Conformité.
-// Réutilise requireQhsAdmin (whitelist owner/manager/admin sur profiles.role).
-// Pattern identique au layout admin Comptabilité — voir src/lib/qhs/auth.ts.
-import { requireQhsAdmin } from "@/lib/qhs/auth";
+// Utilise requirePermission (RBAC basé sur role_permissions).
+import { requirePermission } from "@/lib/rbac";
 
 export default async function DocumentsLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  await requireQhsAdmin();
+  await requirePermission("m12_documents", "read");
   return <>{children}</>;
 }

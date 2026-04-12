@@ -1,9 +1,9 @@
-import { requireQhsAdmin } from "@/lib/qhs/auth";
+import { requirePermission } from "@/lib/rbac";
 import { getCategories, getDocumentsWithStatus } from "@/lib/documents/queries";
 import { CalendrierClient } from "./_calendrier-client";
 
 export default async function CalendrierPage() {
-  const { restaurantId } = await requireQhsAdmin();
+  const { restaurantId } = await requirePermission("m12_documents", "read");
   const [categories, allDocs] = await Promise.all([
     getCategories(),
     getDocumentsWithStatus(restaurantId),
