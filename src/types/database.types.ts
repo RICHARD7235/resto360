@@ -969,6 +969,7 @@ export type Database = {
       menu_categories: {
         Row: {
           created_at: string | null
+          default_course: number
           default_station_id: string | null
           id: string
           name: string
@@ -977,6 +978,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          default_course?: number
           default_station_id?: string | null
           id?: string
           name: string
@@ -985,6 +987,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          default_course?: number
           default_station_id?: string | null
           id?: string
           name?: string
@@ -1166,6 +1169,7 @@ export type Database = {
       }
       order_items: {
         Row: {
+          course_number: number
           created_at: string | null
           id: string
           menu_id: string | null
@@ -1181,6 +1185,7 @@ export type Database = {
           unit_price: number
         }
         Insert: {
+          course_number?: number
           created_at?: string | null
           id?: string
           menu_id?: string | null
@@ -1196,6 +1201,7 @@ export type Database = {
           unit_price: number
         }
         Update: {
+          course_number?: number
           created_at?: string | null
           id?: string
           menu_id?: string | null
@@ -1450,7 +1456,9 @@ export type Database = {
       }
       preparation_tickets: {
         Row: {
+          course_number: number
           created_at: string
+          fired_at: string | null
           id: string
           order_id: string
           position: number | null
@@ -1460,7 +1468,9 @@ export type Database = {
           status: string
         }
         Insert: {
+          course_number?: number
           created_at?: string
+          fired_at?: string | null
           id?: string
           order_id: string
           position?: number | null
@@ -1470,7 +1480,9 @@ export type Database = {
           status?: string
         }
         Update: {
+          course_number?: number
           created_at?: string
+          fired_at?: string | null
           id?: string
           order_id?: string
           position?: number | null
@@ -2318,6 +2330,7 @@ export type Database = {
       restaurants: {
         Row: {
           address: string | null
+          auto_fire_delay_minutes: number | null
           created_at: string | null
           email: string | null
           id: string
@@ -2332,6 +2345,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          auto_fire_delay_minutes?: number | null
           created_at?: string | null
           email?: string | null
           id?: string
@@ -2346,6 +2360,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          auto_fire_delay_minutes?: number | null
           created_at?: string | null
           email?: string | null
           id?: string
@@ -3488,4 +3503,3 @@ export const Constants = {
     },
   },
 } as const
-
