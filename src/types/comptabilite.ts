@@ -1,5 +1,6 @@
 export type AccountingSnapshot = {
   id: string;
+  restaurant_id: string;
   period: string;
   ca_ht: number;
   ca_ttc: number;
