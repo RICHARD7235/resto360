@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Plus, ChefHat, Monitor, Volume2, VolumeX } from "lucide-react";
+import { Plus, ChefHat, Monitor, Volume2, VolumeX, Ban } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -9,12 +9,19 @@ import { useCommandesStore } from "@/stores/commandes.store";
 import { FloorPlan } from "@/components/modules/commandes/floor-plan";
 import { OrderSummary } from "@/components/modules/commandes/order-summary";
 import {
+  CancellationDialog,
+  type CancelTarget,
+} from "@/components/modules/commandes/cancellation-dialog";
+import { PaymentDialog } from "@/components/modules/commandes/payment-dialog";
+import {
   getActiveOrders,
   getOrderStats,
   updateOrderStatus,
   getPreparationTickets,
   getTodayReservationsForFloorPlan,
   getRestaurantId,
+  cancelOrderItem,
+  cancelOrder,
 } from "./actions";
 import { getActiveStations } from "../admin-operationnelle/actions";
 import { useRealtimeSubscription } from "@/hooks/use-realtime";
@@ -227,7 +234,15 @@ export default function CommandesPage() {
     revenue: 0,
     activeOrders: 0,
     completedOrders: 0,
+    breakdown: {
+      dine_in: { count: 0, revenue: 0 },
+      takeaway: { count: 0, revenue: 0 },
+      delivery: { count: 0, revenue: 0 },
+    },
   });
+  const [cancelTarget, setCancelTarget] = useState<CancelTarget | null>(null);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [paymentOrderId, setPaymentOrderId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [prepTickets, setPrepTickets] = useState<PreparationTicketWithItems[]>([]);
   const [stations, setStations] = useState<Station[]>([]);
@@ -325,6 +340,42 @@ export default function CommandesPage() {
     }
   }
 
+  function handleCancelItem(itemId: string, itemName: string) {
+    setCancelTarget({ type: "item", id: itemId, label: itemName });
+    setCancelDialogOpen(true);
+  }
+
+  function handleCancelOrder(orderId: string) {
+    const order = orders.find((o) => o.id === orderId);
+    const label = order?.table_number
+      ? `Commande Table ${order.table_number}`
+      : `Commande #${orderId.slice(0, 8)}`;
+    setCancelTarget({ type: "order", id: orderId, label });
+    setCancelDialogOpen(true);
+  }
+
+  async function handleConfirmCancel(reason: string) {
+    if (!cancelTarget) return;
+    try {
+      if (cancelTarget.type === "item") {
+        await cancelOrderItem(cancelTarget.id, reason);
+      } else {
+        await cancelOrder(cancelTarget.id, reason);
+      }
+      toast.success("Annulation enregistree.");
+      await fetchData();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Erreur lors de l'annulation";
+      toast.error(message);
+      throw error; // re-throw so dialog stays open
+    }
+  }
+
+  function handleOpenPayment(orderId: string) {
+    setPaymentOrderId(orderId);
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -371,6 +422,14 @@ export default function CommandesPage() {
             </Button>
           )}
           <SoundToggle />
+          <Button
+            variant="outline"
+            className="min-h-11 gap-2"
+            render={<Link href="/commandes/annulations" />}
+          >
+            <Ban className="h-4 w-4" />
+            Annulations
+          </Button>
           {selectedTable && (
             <Button
               className="min-h-11 gap-2"
@@ -416,16 +475,27 @@ export default function CommandesPage() {
                   total: selectedOrder.total ?? 0,
                   notes: selectedOrder.notes,
                   created_at: selectedOrder.created_at ?? new Date().toISOString(),
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  order_type: (selectedOrder as any).order_type ?? "dine_in",
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  paid_amount: (selectedOrder as any).paid_amount ?? 0,
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  customer_name: (selectedOrder as any).customer_name ?? null,
                   items: selectedOrder.order_items.map((item) => ({
                     id: item.id,
                     product_name: item.product_name,
                     quantity: item.quantity,
                     unit_price: item.unit_price,
                     status: item.status ?? "pending",
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    payment_id: (item as any).payment_id ?? null,
                   })),
                 }}
                 onViewDetail={() => {}}
                 onStatusChange={handleStatusChange}
+                onCancelItem={handleCancelItem}
+                onCancelOrder={handleCancelOrder}
+                onOpenPayment={handleOpenPayment}
               />
               <Button
                 variant="outline"
@@ -482,6 +552,48 @@ export default function CommandesPage() {
           )}
         </div>
       </div>
+
+      {/* Cancellation dialog */}
+      <CancellationDialog
+        open={cancelDialogOpen}
+        onOpenChange={setCancelDialogOpen}
+        target={cancelTarget}
+        onConfirm={handleConfirmCancel}
+      />
+
+      {/* Payment dialog */}
+      {paymentOrderId && (() => {
+        const payOrder = orders.find((o) => o.id === paymentOrderId);
+        if (!payOrder) return null;
+        return (
+          <PaymentDialog
+            open={!!paymentOrderId}
+            onOpenChange={(open) => {
+              if (!open) setPaymentOrderId(null);
+            }}
+            order={{
+              id: payOrder.id,
+              total: payOrder.total ?? 0,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              paid_amount: (payOrder as any).paid_amount ?? 0,
+              items: payOrder.order_items
+                .filter((i) => i.status !== "cancelled")
+                .map((item) => ({
+                  id: item.id,
+                  product_name: item.product_name,
+                  quantity: item.quantity,
+                  unit_price: item.unit_price,
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  payment_id: (item as any).payment_id ?? null,
+                })),
+            }}
+            onPaymentComplete={async () => {
+              setPaymentOrderId(null);
+              await fetchData();
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }

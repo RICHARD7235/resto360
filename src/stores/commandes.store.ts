@@ -16,6 +16,8 @@ export interface CartItem {
   real_menu_id?: string;
 }
 
+export type OrderType = "dine_in" | "takeaway" | "delivery";
+
 export interface CommandesState {
   // Table sélectionnée sur le plan de salle
   selectedTable: string | null;
@@ -29,6 +31,16 @@ export interface CommandesState {
   removeMenuFromCart: (menuId: string) => void;
   updateCartQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
+
+  // Type de commande et infos client
+  orderType: OrderType;
+  setOrderType: (type: OrderType) => void;
+  customerName: string;
+  setCustomerName: (name: string) => void;
+  customerPhone: string;
+  setCustomerPhone: (phone: string) => void;
+  deliveryAddress: string;
+  setDeliveryAddress: (address: string) => void;
 
   // Catégorie active dans la grille produits
   activeCategory: string | null;
@@ -110,7 +122,23 @@ export const useCommandesStore = create<CommandesState>((set) => ({
       };
     }),
 
-  clearCart: () => set({ cart: [] }),
+  clearCart: () =>
+    set({
+      cart: [],
+      orderType: "dine_in",
+      customerName: "",
+      customerPhone: "",
+      deliveryAddress: "",
+    }),
+
+  orderType: "dine_in",
+  setOrderType: (orderType) => set({ orderType }),
+  customerName: "",
+  setCustomerName: (customerName) => set({ customerName }),
+  customerPhone: "",
+  setCustomerPhone: (customerPhone) => set({ customerPhone }),
+  deliveryAddress: "",
+  setDeliveryAddress: (deliveryAddress) => set({ deliveryAddress }),
 
   activeCategory: null,
   setActiveCategory: (activeCategory) => set({ activeCategory }),

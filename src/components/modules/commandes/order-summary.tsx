@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Clock, Users, Receipt } from "lucide-react";
+import { Clock, Users, Receipt, X, CreditCard, ShoppingBag, Truck, Store } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardAction } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 function computeElapsed(createdAt: string) {
   return Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000);
@@ -13,6 +15,15 @@ function computeElapsed(createdAt: string) {
 // Types
 // ---------------------------------------------------------------------------
 
+interface OrderSummaryItem {
+  id: string;
+  product_name: string;
+  quantity: number;
+  unit_price: number;
+  status: string;
+  payment_id?: string | null;
+}
+
 interface OrderSummaryProps {
   order: {
     id: string;
@@ -21,33 +32,45 @@ interface OrderSummaryProps {
     total: number;
     notes: string | null;
     created_at: string;
-    items: {
-      id: string;
-      product_name: string;
-      quantity: number;
-      unit_price: number;
-      status: string;
-    }[];
+    order_type?: string;
+    paid_amount?: number;
+    customer_name?: string | null;
+    items: OrderSummaryItem[];
   };
   onViewDetail: () => void;
   onStatusChange?: (orderId: string, status: string) => void;
+  onCancelItem?: (itemId: string, itemName: string) => void;
+  onCancelOrder?: (orderId: string) => void;
+  onOpenPayment?: (orderId: string) => void;
 }
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   draft: { label: "Brouillon", variant: "outline" },
-  sent: { label: "Envoyée", variant: "destructive" },
-  preparing: { label: "En prépa", variant: "default" },
-  ready: { label: "Prête", variant: "secondary" },
+  sent: { label: "Envoyee", variant: "destructive" },
+  preparing: { label: "En prepa", variant: "default" },
+  ready: { label: "Prete", variant: "secondary" },
   served: { label: "Servie", variant: "outline" },
-  paid: { label: "Payée", variant: "outline" },
-  cancelled: { label: "Annulée", variant: "destructive" },
+  paid: { label: "Payee", variant: "outline" },
+  cancelled: { label: "Annulee", variant: "destructive" },
+};
+
+const orderTypeConfig: Record<string, { label: string; icon: typeof Store }> = {
+  dine_in: { label: "Sur place", icon: Store },
+  takeaway: { label: "A emporter", icon: ShoppingBag },
+  delivery: { label: "Livraison", icon: Truck },
 };
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function OrderSummary({ order, onViewDetail }: OrderSummaryProps) {
+export function OrderSummary({
+  order,
+  onViewDetail,
+  onCancelItem,
+  onCancelOrder,
+  onOpenPayment,
+}: OrderSummaryProps) {
   const [elapsed, setElapsed] = useState(() => computeElapsed(order.created_at));
 
   useEffect(() => {
@@ -58,16 +81,38 @@ export function OrderSummary({ order, onViewDetail }: OrderSummaryProps) {
   }, [order.created_at]);
 
   const config = statusConfig[order.status] ?? { label: order.status, variant: "outline" as const };
+  const orderType = order.order_type ?? "dine_in";
+  const typeConfig = orderTypeConfig[orderType];
+  const TypeIcon = typeConfig?.icon ?? Store;
+  const paidAmount = order.paid_amount ?? 0;
+  const paymentProgress = order.total > 0 ? Math.min(100, (paidAmount / order.total) * 100) : 0;
+  const isFullyPaid = paidAmount >= order.total;
+
+  const canPay =
+    ["ready", "served"].includes(order.status) && !isFullyPaid;
+  const canCancel = !["paid", "cancelled"].includes(order.status);
+
+  const activeItems = order.items.filter((i) => i.status !== "cancelled");
 
   return (
-    <Card className="cursor-pointer transition-shadow hover:shadow-md" onClick={onViewDetail}>
+    <Card className="transition-shadow hover:shadow-md">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-sm font-semibold">
-          Table {order.table_number ?? "—"}
+          {order.table_number ? `Table ${order.table_number}` : order.customer_name ?? "—"}
         </CardTitle>
-        <Badge variant={config.variant}>{config.label}</Badge>
+        <CardAction>
+          <div className="flex items-center gap-1.5">
+            {orderType !== "dine_in" && (
+              <Badge variant="outline" className="gap-1 text-[10px]">
+                <TypeIcon className="h-3 w-3" />
+                {typeConfig?.label}
+              </Badge>
+            )}
+            <Badge variant={config.variant}>{config.label}</Badge>
+          </div>
+        </CardAction>
       </CardHeader>
-      <CardContent className="space-y-2">
+      <CardContent className="space-y-3" onClick={onViewDetail}>
         <div className="flex items-center gap-4 text-xs text-muted-foreground">
           <span className="flex items-center gap-1">
             <Clock className="h-3 w-3" />
@@ -75,31 +120,115 @@ export function OrderSummary({ order, onViewDetail }: OrderSummaryProps) {
           </span>
           <span className="flex items-center gap-1">
             <Receipt className="h-3 w-3" />
-            {order.total.toFixed(2)} €
+            {order.total.toFixed(2)} EUR
           </span>
           <span className="flex items-center gap-1">
             <Users className="h-3 w-3" />
-            {order.items.length} article{order.items.length > 1 ? "s" : ""}
+            {activeItems.length} article{activeItems.length > 1 ? "s" : ""}
           </span>
         </div>
 
-        <ul className="space-y-0.5 text-xs">
-          {order.items.slice(0, 4).map((item) => (
-            <li key={item.id} className="flex justify-between">
-              <span>
-                {item.quantity}× {item.product_name}
-              </span>
+        {/* Payment progress */}
+        {paidAmount > 0 && (
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground">
-                {(item.quantity * item.unit_price).toFixed(2)} €
+                Paye : {paidAmount.toFixed(2)} / {order.total.toFixed(2)} EUR
               </span>
-            </li>
-          ))}
-          {order.items.length > 4 && (
+              <span className="font-medium">
+                {isFullyPaid ? "Solde" : `${paymentProgress.toFixed(0)}%`}
+              </span>
+            </div>
+            <div className="h-1.5 w-full rounded-full bg-muted">
+              <div
+                className={cn(
+                  "h-full rounded-full transition-all",
+                  isFullyPaid ? "bg-green-500" : "bg-primary"
+                )}
+                style={{ width: `${paymentProgress}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        <ul className="space-y-0.5 text-xs">
+          {order.items.slice(0, 6).map((item) => {
+            const isCancelled = item.status === "cancelled";
+            const isPaid = !!item.payment_id;
+            return (
+              <li
+                key={item.id}
+                className={cn(
+                  "flex items-center justify-between gap-1",
+                  isCancelled && "opacity-40 line-through"
+                )}
+              >
+                <span className="flex items-center gap-1 min-w-0">
+                  <span className="truncate">
+                    {item.quantity}x {item.product_name}
+                  </span>
+                  {isPaid && !isCancelled && (
+                    <Badge variant="outline" className="text-[9px] px-1 py-0 shrink-0">
+                      Paye
+                    </Badge>
+                  )}
+                </span>
+                <span className="flex items-center gap-1 shrink-0">
+                  <span className="text-muted-foreground">
+                    {(item.quantity * item.unit_price).toFixed(2)} EUR
+                  </span>
+                  {onCancelItem && !isCancelled && canCancel && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 min-h-0 min-w-0 text-destructive hover:text-destructive"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onCancelItem(item.id, item.product_name);
+                      }}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  )}
+                </span>
+              </li>
+            );
+          })}
+          {order.items.length > 6 && (
             <li className="text-muted-foreground italic">
-              +{order.items.length - 4} autre{order.items.length - 4 > 1 ? "s" : ""}
+              +{order.items.length - 6} autre{order.items.length - 6 > 1 ? "s" : ""}
             </li>
           )}
         </ul>
+
+        {/* Action buttons */}
+        <div className="flex gap-2 pt-1">
+          {canPay && onOpenPayment && (
+            <Button
+              className="min-h-11 flex-1 gap-2"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenPayment(order.id);
+              }}
+            >
+              <CreditCard className="h-4 w-4" />
+              Encaisser
+            </Button>
+          )}
+          {canCancel && onCancelOrder && (
+            <Button
+              variant="destructive"
+              className="min-h-11 gap-2"
+              onClick={(e) => {
+                e.stopPropagation();
+                onCancelOrder(order.id);
+              }}
+            >
+              <X className="h-4 w-4" />
+              Annuler
+            </Button>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

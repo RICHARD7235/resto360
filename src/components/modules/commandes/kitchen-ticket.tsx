@@ -36,6 +36,9 @@ export interface TicketData {
   created_at: string;
   table_number: string | null;
   order_notes: string | null;
+  order_type?: string;
+  customer_name?: string | null;
+  delivery_address?: string | null;
   items: TicketItem[];
 }
 
@@ -133,13 +136,28 @@ export function KitchenTicket({
     }
   })();
 
+  const orderType = ticket.order_type ?? "dine_in";
+  const ticketTitle = (() => {
+    if (orderType === "delivery") {
+      return ticket.customer_name
+        ? `Livraison — ${ticket.customer_name}`
+        : "Livraison";
+    }
+    if (orderType === "takeaway") {
+      return ticket.customer_name
+        ? `A emporter — ${ticket.customer_name}`
+        : "A emporter";
+    }
+    return ticket.table_number ? `Table ${ticket.table_number}` : "A emporter";
+  })();
+
   return (
     <Card className="w-full overflow-hidden">
       <CardHeader
         className={cn("-mt-4 rounded-t-xl px-4 py-3", statusConfig.bg, statusConfig.text)}
       >
         <CardTitle className={cn("text-lg font-bold", statusConfig.text)}>
-          {ticket.table_number ? `Table ${ticket.table_number}` : "A emporter"}
+          {ticketTitle}
         </CardTitle>
         <CardAction>
           <div className="flex items-center gap-2">
@@ -225,6 +243,15 @@ export function KitchenTicket({
           );
         })}
       </CardContent>
+
+      {/* Delivery address */}
+      {orderType === "delivery" && ticket.delivery_address && (
+        <CardContent className="border-t pt-2 pb-0">
+          <p className="text-sm font-medium text-muted-foreground">
+            Adresse : {ticket.delivery_address}
+          </p>
+        </CardContent>
+      )}
 
       {ticket.order_notes && (
         <CardContent className="border-t pt-2 pb-0">
