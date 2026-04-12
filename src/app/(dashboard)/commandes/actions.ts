@@ -378,6 +378,7 @@ export async function getActiveOrders(): Promise<OrderWithItems[]> {
     .eq("restaurant_id", restaurantId)
     .gte("created_at", today)
     .in("status", ["sent", "preparing", "ready", "served", "paid"])
+    .or("status.neq.paid,cleared_at.is.null")
     .order("created_at", { ascending: true });
 
   if (error) {
@@ -388,10 +389,7 @@ export async function getActiveOrders(): Promise<OrderWithItems[]> {
 
   if (!orders || orders.length === 0) return [];
 
-  // Exclude paid orders that have been cleared (table already freed by staff)
-  const activeOrders = orders.filter(
-    (o) => o.status !== "paid" || !o.cleared_at
-  );
+  const activeOrders = orders;
 
   if (activeOrders.length === 0) return [];
 
@@ -908,7 +906,7 @@ export async function clearTable(orderId: string): Promise<void> {
 
   const { data: order } = await supabase
     .from("orders")
-    .select("id, restaurant_id, status")
+    .select("id, restaurant_id, status, cleared_at")
     .eq("id", orderId)
     .eq("restaurant_id", restaurantId)
     .single();
@@ -921,11 +919,18 @@ export async function clearTable(orderId: string): Promise<void> {
     throw new Error("La commande doit etre payee avant de liberer la table.");
   }
 
+  // Idempotence: déjà libérée → no-op
+  if (order.cleared_at) return;
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (supabase as any)
+  const { error: clearErr } = await (supabase as any)
     .from("orders")
     .update({ cleared_at: new Date().toISOString() })
     .eq("id", orderId);
+
+  if (clearErr) {
+    throw new Error(`Erreur libération table : ${clearErr.message}`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1536,6 +1541,11 @@ export async function createPayment(
 
   if (!order) {
     throw new Error("Commande non trouvée.");
+  }
+
+  // Guard: commande déjà entièrement réglée
+  if (order.status === "paid") {
+    throw new Error("Cette commande est déjà entièrement réglée.");
   }
 
   if (data.amount <= 0) {

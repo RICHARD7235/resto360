@@ -104,7 +104,7 @@ export function OrderSummary({
   const isFullyPaid = paidAmount >= order.total;
 
   const canPay =
-    ["ready", "served"].includes(order.status) && !isFullyPaid;
+    ["ready", "served", "paid"].includes(order.status) && !isFullyPaid;
   const canCancel = !["paid", "cancelled"].includes(order.status);
 
   const activeItems = order.items.filter((i) => i.status !== "cancelled");
