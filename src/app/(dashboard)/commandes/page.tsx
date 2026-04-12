@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Plus, ChefHat, Monitor } from "lucide-react";
+import { Plus, ChefHat, Monitor, Volume2, VolumeX } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -14,8 +14,10 @@ import {
   updateOrderStatus,
   getPreparationTickets,
   getTodayReservationsForFloorPlan,
+  getRestaurantId,
 } from "./actions";
 import { getActiveStations } from "../admin-operationnelle/actions";
+import { useRealtimeSubscription } from "@/hooks/use-realtime";
 import type { OrderWithItems, OrderStats, PreparationTicketWithItems, FloorPlanReservation } from "./actions";
 import type { Tables } from "@/types/database.types";
 
@@ -112,11 +114,64 @@ function CommandesStats({ stats }: { stats: OrderStats }) {
 }
 
 // ---------------------------------------------------------------------------
+// Sound toggle
+// ---------------------------------------------------------------------------
+
+function SoundToggle() {
+  const [muted, setMuted] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("kds-sound-enabled") === "false";
+  });
+
+  function toggle() {
+    const newMuted = !muted;
+    setMuted(newMuted);
+    localStorage.setItem("kds-sound-enabled", newMuted ? "false" : "true");
+  }
+
+  return (
+    <Button
+      variant="outline"
+      size="icon"
+      className="min-h-11 min-w-11"
+      onClick={toggle}
+      aria-label={muted ? "Activer le son" : "Couper le son"}
+    >
+      {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+    </Button>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Notification hook
 // ---------------------------------------------------------------------------
 
 function useTicketReadyNotifications(tickets: PreparationTicketWithItems[]) {
   const previousReadyRef = useRef<Set<string>>(new Set());
+  const audioUnlockedRef = useRef(false);
+
+  // Unlock AudioContext on first user interaction
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const unlock = () => {
+      if (audioUnlockedRef.current) return;
+      const audio = new Audio("/sounds/kitchen-bell.mp3");
+      audio.volume = 0;
+      audio.play().then(() => {
+        audioUnlockedRef.current = true;
+      }).catch(() => {
+        // Ignore — user hasn't interacted yet
+      });
+    };
+
+    document.addEventListener("click", unlock, { once: true });
+    document.addEventListener("touchstart", unlock, { once: true });
+    return () => {
+      document.removeEventListener("click", unlock);
+      document.removeEventListener("touchstart", unlock);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined" || Notification.permission === "denied") return;
@@ -133,6 +188,15 @@ function useTicketReadyNotifications(tickets: PreparationTicketWithItems[]) {
 
     if (newlyReady.length === 0) return;
 
+    // Play sound if enabled
+    const soundEnabled = localStorage.getItem("kds-sound-enabled") !== "false";
+    if (soundEnabled && audioUnlockedRef.current) {
+      const audio = new Audio("/sounds/kitchen-bell.mp3");
+      audio.volume = 1;
+      audio.play().catch(() => {});
+    }
+
+    // Browser notifications
     for (const ticketId of newlyReady) {
       const ticket = tickets.find((t) => t.id === ticketId);
       if (!ticket) continue;
@@ -168,6 +232,7 @@ export default function CommandesPage() {
   const [prepTickets, setPrepTickets] = useState<PreparationTicketWithItems[]>([]);
   const [stations, setStations] = useState<Station[]>([]);
   const [reservations, setReservations] = useState<FloorPlanReservation[]>([]);
+  const [restaurantId, setRestaurantId] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
@@ -178,18 +243,20 @@ export default function CommandesPage() {
   const fetchData = useCallback(async () => {
     try {
       const today = new Date().toISOString().slice(0, 10);
-      const [ordersData, statsData, ticketsData, stationsData, reservationsData] = await Promise.all([
+      const [ordersData, statsData, ticketsData, stationsData, reservationsData, rid] = await Promise.all([
         getActiveOrders(),
         getOrderStats(today),
         getPreparationTickets(),
         getActiveStations(),
         getTodayReservationsForFloorPlan(),
+        getRestaurantId(),
       ]);
       setOrders(ordersData);
       setStats(statsData);
       setPrepTickets(ticketsData);
       setStations(stationsData);
       setReservations(reservationsData);
+      setRestaurantId(rid);
     } catch (error) {
       console.error("Erreur chargement commandes:", error);
     } finally {
@@ -197,12 +264,41 @@ export default function CommandesPage() {
     }
   }, []);
 
+  // Initial fetch (single load on mount)
   useEffect(() => {
     fetchData();
-    // Refresh toutes les 15s pour le temps réel basique
-    const interval = setInterval(fetchData, 15000);
-    return () => clearInterval(interval);
   }, [fetchData]);
+
+  // Realtime subscriptions — replace 15s polling
+  const rtFilter = restaurantId ? `restaurant_id=eq.${restaurantId}` : undefined;
+
+  useRealtimeSubscription({
+    channel: "orders-rt",
+    table: "orders",
+    filter: rtFilter,
+    onUpdate: fetchData,
+  });
+
+  useRealtimeSubscription({
+    channel: "order-items-rt",
+    table: "order_items",
+    onUpdate: fetchData,
+    // No direct restaurant_id filter — filtered via server action
+  });
+
+  useRealtimeSubscription({
+    channel: "prep-tickets-rt",
+    table: "preparation_tickets",
+    onUpdate: fetchData,
+    // No direct restaurant_id filter — filtered via server action
+  });
+
+  useRealtimeSubscription({
+    channel: "reservations-rt",
+    table: "reservations",
+    filter: rtFilter,
+    onUpdate: fetchData,
+  });
 
   useTicketReadyNotifications(prepTickets);
 
@@ -274,6 +370,7 @@ export default function CommandesPage() {
               Tous les postes
             </Button>
           )}
+          <SoundToggle />
           {selectedTable && (
             <Button
               className="min-h-11 gap-2"
