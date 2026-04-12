@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 // Types
 // ---------------------------------------------------------------------------
 
-type TableStatus = "free" | "occupied" | "waiting" | "ready" | "reserved";
+type TableStatus = "free" | "occupied" | "waiting" | "ready" | "reserved" | "needs_clearing";
 
 interface StationBadge {
   station_name: string;
@@ -37,6 +37,7 @@ const STATUS_COLORS: Record<TableStatus, { bg: string; border: string; text: str
   waiting: { bg: "bg-amber-100", border: "border-amber-400", text: "text-amber-800" },
   ready: { bg: "bg-orange-100", border: "border-orange-400", text: "text-orange-800" },
   reserved: { bg: "bg-purple-100", border: "border-purple-400", text: "text-purple-800" },
+  needs_clearing: { bg: "bg-gray-200", border: "border-gray-400", text: "text-gray-700" },
 };
 
 const BASE_SIZE = 64; // px

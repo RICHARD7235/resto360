@@ -26,6 +26,7 @@ import {
   getRestaurantTables,
   fireNextCourse,
   getOrderCourseStatus,
+  clearTable,
   type RestaurantTable,
 } from "./actions";
 import { getActiveStations } from "../admin-operationnelle/actions";
@@ -39,7 +40,7 @@ type Station = Tables<"preparation_stations">;
 // Table status type alias (for canvas mapping)
 // ---------------------------------------------------------------------------
 
-type TableStatus = "free" | "occupied" | "waiting" | "ready" | "reserved";
+type TableStatus = "free" | "occupied" | "waiting" | "ready" | "reserved" | "needs_clearing";
 
 function getTableStatus(
   orders: OrderWithItems[],
@@ -48,11 +49,21 @@ function getTableStatus(
   reservations: FloorPlanReservation[],
 ) {
   const order = orders.find(
-    (o) => o.table_number === tableNumber && !["paid", "cancelled"].includes(o.status ?? "")
+    (o) => o.table_number === tableNumber && !["cancelled"].includes(o.status ?? "")
   );
 
   // If table has an active order, show order status (takes priority)
   if (order) {
+    // Paid + not yet cleared = needs_clearing (à débarrasser)
+    if (order.status === "paid") {
+      return {
+        status: "needs_clearing" as const,
+        orderTotal: order.total ?? undefined,
+        orderCreatedAt: order.created_at ?? undefined,
+        guestCount: order.order_items.length,
+      };
+    }
+
     const statusMap: Record<string, "occupied" | "waiting" | "ready"> = {
       draft: "occupied",
       sent: "occupied",
@@ -442,6 +453,17 @@ export default function CommandesPage() {
     }
   }, [fetchData]);
 
+  const handleClearTable = useCallback(async (orderId: string) => {
+    try {
+      await clearTable(orderId);
+      toast.success("Table liberee !");
+      setSelectedTable(null);
+      await fetchData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erreur liberation table");
+    }
+  }, [fetchData, setSelectedTable]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -577,6 +599,7 @@ export default function CommandesPage() {
                 onOpenPayment={handleOpenPayment}
                 onFireNextCourse={handleFireNextCourse}
                 nextFireableCourse={courseStatus?.nextFireableCourse ?? null}
+                onClearTable={handleClearTable}
               />
               <Button
                 variant="outline"

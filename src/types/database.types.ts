@@ -1301,6 +1301,7 @@ export type Database = {
       }
       orders: {
         Row: {
+          cleared_at: string | null
           created_at: string | null
           customer_name: string | null
           customer_phone: string | null
@@ -1317,6 +1318,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          cleared_at?: string | null
           created_at?: string | null
           customer_name?: string | null
           customer_phone?: string | null
@@ -1333,6 +1335,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          cleared_at?: string | null
           created_at?: string | null
           customer_name?: string | null
           customer_phone?: string | null

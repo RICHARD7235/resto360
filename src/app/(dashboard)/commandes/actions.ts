@@ -377,7 +377,7 @@ export async function getActiveOrders(): Promise<OrderWithItems[]> {
     .select("*")
     .eq("restaurant_id", restaurantId)
     .gte("created_at", today)
-    .in("status", ["sent", "preparing", "ready", "served"])
+    .in("status", ["sent", "preparing", "ready", "served", "paid"])
     .order("created_at", { ascending: true });
 
   if (error) {
@@ -388,7 +388,14 @@ export async function getActiveOrders(): Promise<OrderWithItems[]> {
 
   if (!orders || orders.length === 0) return [];
 
-  const orderIds = orders.map((o) => o.id);
+  // Exclude paid orders that have been cleared (table already freed by staff)
+  const activeOrders = orders.filter(
+    (o) => o.status !== "paid" || !o.cleared_at
+  );
+
+  if (activeOrders.length === 0) return [];
+
+  const orderIds = activeOrders.map((o) => o.id);
   const { data: items } = await supabase
     .from("order_items")
     .select("*")
@@ -400,7 +407,7 @@ export async function getActiveOrders(): Promise<OrderWithItems[]> {
     itemsByOrder[item.order_id].push(item);
   }
 
-  return orders.map((order) => ({
+  return activeOrders.map((order) => ({
     ...order,
     order_items: itemsByOrder[order.id] ?? [],
   }));
@@ -885,6 +892,40 @@ export async function getOrderCourseStatus(orderId: string): Promise<{
     : null;
 
   return { courses, nextFireableCourse };
+}
+
+// ---------------------------------------------------------------------------
+// Table clearing
+// ---------------------------------------------------------------------------
+
+export async function clearTable(orderId: string): Promise<void> {
+  const { restaurantId, role } = await getUserContext();
+  const supabase = await createClient();
+
+  if (!["owner", "admin", "manager", "staff"].includes(role)) {
+    throw new Error("Vous n'avez pas les droits pour liberer la table.");
+  }
+
+  const { data: order } = await supabase
+    .from("orders")
+    .select("id, restaurant_id, status")
+    .eq("id", orderId)
+    .eq("restaurant_id", restaurantId)
+    .single();
+
+  if (!order) {
+    throw new Error("Commande non trouvee.");
+  }
+
+  if (order.status !== "paid") {
+    throw new Error("La commande doit etre payee avant de liberer la table.");
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (supabase as any)
+    .from("orders")
+    .update({ cleared_at: new Date().toISOString() })
+    .eq("id", orderId);
 }
 
 // ---------------------------------------------------------------------------

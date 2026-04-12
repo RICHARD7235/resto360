@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Clock, Users, Receipt, X, CreditCard, ShoppingBag, Truck, Store, Flame, Pause } from "lucide-react";
+import { Clock, Users, Receipt, X, CreditCard, ShoppingBag, Truck, Store, Flame, Pause, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardAction } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,6 +46,7 @@ interface OrderSummaryProps {
   onOpenPayment?: (orderId: string) => void;
   onFireNextCourse?: (orderId: string) => void;
   nextFireableCourse?: number | null;
+  onClearTable?: (orderId: string) => void;
 }
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -83,6 +84,7 @@ export function OrderSummary({
   onOpenPayment,
   onFireNextCourse,
   nextFireableCourse,
+  onClearTable,
 }: OrderSummaryProps) {
   const [elapsed, setElapsed] = useState(() => computeElapsed(order.created_at));
 
@@ -325,6 +327,18 @@ export function OrderSummary({
             >
               <X className="h-4 w-4" />
               Annuler
+            </Button>
+          )}
+          {order.status === "paid" && onClearTable && (
+            <Button
+              className="min-h-11 flex-1 gap-2"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClearTable(order.id);
+              }}
+            >
+              <Sparkles className="h-4 w-4" />
+              Liberer la table
             </Button>
           )}
         </div>

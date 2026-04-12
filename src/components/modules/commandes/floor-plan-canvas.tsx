@@ -47,6 +47,7 @@ const LEGEND: { status: TableStatus; label: string; color: string }[] = [
   { status: "occupied", label: "Occupee", color: "bg-blue-300" },
   { status: "waiting", label: "En attente", color: "bg-amber-300" },
   { status: "ready", label: "Prete", color: "bg-orange-300" },
+  { status: "needs_clearing", label: "A debarrasser", color: "bg-gray-300" },
 ];
 
 // ---------------------------------------------------------------------------
