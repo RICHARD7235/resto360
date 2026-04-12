@@ -875,9 +875,10 @@ export async function getOrderCourseStatus(orderId: string): Promise<{
       };
     });
 
-  // Next fireable = smallest held course, but only if all fired courses are ready/served
-  const firedCourses = courses.filter((c) => c.status !== "hold");
-  const allFiredDone = firedCourses.every((c) => c.status === "ready" || c.status === "served");
+  // Next fireable = smallest held course, but only if all fired non-zero courses are ready/served
+  // Course 0 (drinks, menu headers) is independent and never blocks firing
+  const firedNonZero = courses.filter((c) => c.status !== "hold" && c.course_number > 0);
+  const allFiredDone = firedNonZero.length === 0 || firedNonZero.every((c) => c.status === "ready" || c.status === "served");
   const heldCourses = courses.filter((c) => c.status === "hold");
   const nextFireableCourse = allFiredDone && heldCourses.length > 0
     ? heldCourses[0].course_number
