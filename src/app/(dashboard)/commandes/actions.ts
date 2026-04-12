@@ -914,10 +914,10 @@ export async function addItemsToOrder(
     );
   }
 
-  // Recalculate total from all items
+  // Recalculate total from all items (P0-5: exclude cancelled items)
   const { data: allItems, error: fetchError } = await supabase
     .from("order_items")
-    .select("quantity, unit_price")
+    .select("quantity, unit_price, status")
     .eq("order_id", orderId);
 
   if (fetchError) {
@@ -926,10 +926,9 @@ export async function addItemsToOrder(
     );
   }
 
-  const newTotal = (allItems ?? []).reduce(
-    (sum, item) => sum + item.unit_price * item.quantity,
-    0
-  );
+  const newTotal = (allItems ?? [])
+    .filter((item) => item.status !== "cancelled")
+    .reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
 
   // Update order total
   const { error: updateError } = await supabase
@@ -1011,8 +1010,13 @@ export async function cancelOrderItem(
   itemId: string,
   reason: string
 ): Promise<void> {
-  const { userId, restaurantId } = await getUserContext();
+  const { userId, restaurantId, role } = await getUserContext();
   const supabase = await createClient();
+
+  // P0-3: Only owner/admin/manager can cancel items
+  if (!["owner", "admin", "manager"].includes(role)) {
+    throw new Error("Seuls les responsables peuvent annuler un article.");
+  }
 
   // Fetch item + verify restaurant ownership
   const { data: item, error: fetchErr } = await supabase
@@ -1023,6 +1027,11 @@ export async function cancelOrderItem(
 
   if (fetchErr || !item) {
     throw new Error("Article non trouvé.");
+  }
+
+  // P0-2: Guard against double cancellation
+  if (item.status === "cancelled") {
+    throw new Error("Cet article est déjà annulé.");
   }
 
   const { data: order } = await supabase
@@ -1258,8 +1267,13 @@ export async function createPayment(
     itemIds?: string[];
   }
 ): Promise<void> {
-  const { userId, restaurantId } = await getUserContext();
+  const { userId, restaurantId, role } = await getUserContext();
   const supabase = await createClient();
+
+  // P0-4: Only owner/admin/manager/staff can process payments (not cook)
+  if (!["owner", "admin", "manager", "staff"].includes(role)) {
+    throw new Error("Vous n'avez pas les droits pour encaisser.");
+  }
 
   // Verify order
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1276,6 +1290,15 @@ export async function createPayment(
 
   if (data.amount <= 0) {
     throw new Error("Le montant doit être supérieur à 0.");
+  }
+
+  // P0-1: Guard against overpayment
+  const currentPaid = order.paid_amount ?? 0;
+  const remaining = (order.total ?? 0) - currentPaid;
+  if (data.amount > remaining + 0.01) {
+    throw new Error(
+      `Montant trop élevé. Reste à payer : ${remaining.toFixed(2)} €.`
+    );
   }
 
   // Insert payment
