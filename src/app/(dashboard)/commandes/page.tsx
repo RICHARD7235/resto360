@@ -346,7 +346,7 @@ export default function CommandesPage() {
       return;
     }
     const order = orders.find(
-      (o) => o.table_number === selectedTable && !["paid", "cancelled"].includes(o.status ?? "")
+      (o) => o.table_number === selectedTable && !["cancelled"].includes(o.status ?? "")
     );
     if (!order) {
       setCourseStatus(null);
@@ -389,7 +389,7 @@ export default function CommandesPage() {
     ? orders.find(
         (o) =>
           o.table_number === selectedTable &&
-          !["paid", "cancelled"].includes(o.status ?? "")
+          !["cancelled"].includes(o.status ?? "")
       )
     : null;
 

@@ -1557,7 +1557,6 @@ export async function createPayment(
     .from("order_payments")
     .insert({
       order_id: orderId,
-      restaurant_id: restaurantId,
       amount: data.amount,
       method: data.method,
       label: data.label ?? null,

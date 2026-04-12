@@ -76,6 +76,9 @@ export function PaymentDialog({
   const [paidParts, setPaidParts] = useState(0);
   const [splitMethod, setSplitMethod] = useState<PaymentMethod>("card");
 
+  // --- Tab: full payment ---
+  const [fullMethod, setFullMethod] = useState<PaymentMethod>("card");
+
   // --- Common ---
   const [submitting, setSubmitting] = useState(false);
 
@@ -153,6 +156,25 @@ export function PaymentDialog({
     }
   }
 
+  async function handlePayFull() {
+    if (remaining <= 0) return;
+    setSubmitting(true);
+    try {
+      await createPayment(order.id, {
+        amount: remaining,
+        method: fullMethod,
+        label: "Paiement total",
+      });
+      toast.success("Commande entierement payee.");
+      await onPaymentComplete();
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Erreur paiement";
+      toast.error(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function handlePayRemaining() {
     if (remaining <= 0) return;
     setSubmitting(true);
@@ -177,6 +199,7 @@ export function PaymentDialog({
       // Reset state
       setSelectedItemIds(new Set());
       setCashGiven("");
+      setFullMethod("card");
       setGuests(2);
       setPaidParts(0);
     }
@@ -204,6 +227,32 @@ export function PaymentDialog({
             </p>
           </div>
         ) : (
+          <div className="space-y-4">
+            {/* Quick full payment */}
+            <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Paiement total</span>
+                <span className="text-lg font-bold">{remaining.toFixed(2)} EUR</span>
+              </div>
+              <MethodSelector value={fullMethod} onChange={setFullMethod} />
+              <Button
+                className="min-h-11 w-full"
+                disabled={submitting || remaining <= 0}
+                onClick={handlePayFull}
+              >
+                {submitting ? "Encaissement..." : `Tout payer (${remaining.toFixed(2)} EUR)`}
+              </Button>
+            </div>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">ou paiement partiel</span>
+              </div>
+            </div>
+
           <Tabs defaultValue="items">
             <TabsList className="w-full">
               <TabsTrigger value="items">Par articles</TabsTrigger>
@@ -406,6 +455,7 @@ export function PaymentDialog({
               </div>
             </TabsContent>
           </Tabs>
+          </div>
         )}
       </DialogContent>
     </Dialog>
