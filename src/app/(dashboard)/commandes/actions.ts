@@ -117,6 +117,14 @@ async function getUserRestaurantId(): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
+// Exposed helper for client-side Realtime filter
+// ---------------------------------------------------------------------------
+
+export async function getRestaurantId(): Promise<string> {
+  return getUserRestaurantId();
+}
+
+// ---------------------------------------------------------------------------
 // Queries
 // ---------------------------------------------------------------------------
 
