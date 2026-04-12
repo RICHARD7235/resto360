@@ -383,6 +383,7 @@ export type Database = {
           display_order: number
           id: string
           is_active: boolean
+          is_default: boolean
           name: string
           restaurant_id: string
         }
@@ -392,6 +393,7 @@ export type Database = {
           display_order?: number
           id?: string
           is_active?: boolean
+          is_default?: boolean
           name: string
           restaurant_id: string
         }
@@ -401,6 +403,7 @@ export type Database = {
           display_order?: number
           id?: string
           is_active?: boolean
+          is_default?: boolean
           name?: string
           restaurant_id?: string
         }

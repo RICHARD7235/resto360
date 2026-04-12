@@ -1,6 +1,39 @@
 import { createClient } from "@/lib/supabase/server";
 
 /**
+ * Returns the default fallback station for a restaurant.
+ * Priority: station with is_default=true > first by display_order.
+ */
+async function getDefaultStation(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  restaurantId: string
+): Promise<string | null> {
+  // Try explicit default first
+  const { data: defaultStation } = await supabase
+    .from("preparation_stations")
+    .select("id")
+    .eq("restaurant_id", restaurantId)
+    .eq("is_active", true)
+    .eq("is_default", true)
+    .limit(1)
+    .maybeSingle();
+
+  if (defaultStation) return defaultStation.id;
+
+  // Fallback: first by display_order (backward compat)
+  const { data: firstStation } = await supabase
+    .from("preparation_stations")
+    .select("id")
+    .eq("restaurant_id", restaurantId)
+    .eq("is_active", true)
+    .order("display_order", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  return firstStation?.id ?? null;
+}
+
+/**
  * Resolves stations for multiple products in batch (fewer queries).
  * Priority: product.station_id > category.default_station_id > null
  */
@@ -80,21 +113,16 @@ export async function createPreparationTickets(
     }
   }
 
-  // For unassigned items, assign to the first station (Cuisine by default)
+  // For unassigned items, assign to the default station
   if (unassigned.length > 0) {
-    const { data: defaultStation } = await supabase
-      .from("preparation_stations")
-      .select("id")
-      .eq("restaurant_id", restaurantId)
-      .eq("is_active", true)
-      .order("display_order", { ascending: true })
-      .limit(1)
-      .single();
+    const defaultStationId = await getDefaultStation(supabase, restaurantId);
 
-    if (defaultStation) {
-      const existing = itemsByStation.get(defaultStation.id) ?? [];
+    if (defaultStationId) {
+      const existing = itemsByStation.get(defaultStationId) ?? [];
       existing.push(...unassigned);
-      itemsByStation.set(defaultStation.id, existing);
+      itemsByStation.set(defaultStationId, existing);
+    } else {
+      console.warn(`[KDS] No default station found for restaurant ${restaurantId}. ${unassigned.length} items unrouted.`);
     }
   }
 
@@ -167,19 +195,14 @@ export async function addItemsToPreparationTickets(
 
   // Handle unassigned
   if (unassigned.length > 0) {
-    const { data: defaultStation } = await supabase
-      .from("preparation_stations")
-      .select("id")
-      .eq("restaurant_id", restaurantId)
-      .eq("is_active", true)
-      .order("display_order", { ascending: true })
-      .limit(1)
-      .single();
+    const defaultStationId = await getDefaultStation(supabase, restaurantId);
 
-    if (defaultStation) {
-      const existing = itemsByStation.get(defaultStation.id) ?? [];
+    if (defaultStationId) {
+      const existing = itemsByStation.get(defaultStationId) ?? [];
       existing.push(...unassigned);
-      itemsByStation.set(defaultStation.id, existing);
+      itemsByStation.set(defaultStationId, existing);
+    } else {
+      console.warn(`[KDS] No default station found for restaurant ${restaurantId}. ${unassigned.length} items unrouted.`);
     }
   }
 
