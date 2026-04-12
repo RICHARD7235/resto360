@@ -1,8 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
 import type { Tables, Database } from "@/types/database.types";
+import { requireActionPermission } from "@/lib/rbac";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -50,24 +50,19 @@ export interface CarteStats {
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function getSupabase() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/connexion");
-  return supabase;
-}
+// getSupabase() removed — use requireActionPermission() + createClient() instead
 
 // ---------------------------------------------------------------------------
 // Categories
 // ---------------------------------------------------------------------------
 
 export async function getCategories(): Promise<MenuCategoryRow[]> {
-  const supabase = await getSupabase();
+  const { restaurantId } = await requireActionPermission("m04_carte", "read");
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("menu_categories")
     .select("*")
+    .eq("restaurant_id", restaurantId)
     .order("sort_order", { ascending: true });
   if (error) throw error;
   return data ?? [];
@@ -77,20 +72,13 @@ export async function createCategory(
   name: string,
   sortOrder: number
 ): Promise<MenuCategoryRow> {
-  const supabase = await getSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("restaurant_id")
-    .eq("id", user!.id)
-    .single();
+  const { restaurantId } = await requireActionPermission("m04_carte", "write");
+  const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("menu_categories")
     .insert({
-      restaurant_id: profile!.restaurant_id!,
+      restaurant_id: restaurantId,
       name,
       sort_order: sortOrder,
     })
@@ -104,11 +92,13 @@ export async function updateCategory(
   id: string,
   updates: { name?: string; sort_order?: number }
 ): Promise<MenuCategoryRow> {
-  const supabase = await getSupabase();
+  const { restaurantId } = await requireActionPermission("m04_carte", "write");
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("menu_categories")
     .update(updates)
     .eq("id", id)
+    .eq("restaurant_id", restaurantId)
     .select()
     .single();
   if (error) throw error;
@@ -119,21 +109,14 @@ export async function updateCategoryStation(
   id: string,
   stationId: string | null
 ): Promise<void> {
-  const supabase = await getSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("restaurant_id")
-    .eq("id", user!.id)
-    .single();
+  const { restaurantId } = await requireActionPermission("m04_carte", "write");
+  const supabase = await createClient();
 
   const { error } = await supabase
     .from("menu_categories")
     .update({ default_station_id: stationId })
     .eq("id", id)
-    .eq("restaurant_id", profile!.restaurant_id!);
+    .eq("restaurant_id", restaurantId);
 
   if (error) {
     throw new Error(`Erreur mise a jour du poste categorie : ${error.message}`);
@@ -141,11 +124,13 @@ export async function updateCategoryStation(
 }
 
 export async function deleteCategory(id: string): Promise<void> {
-  const supabase = await getSupabase();
+  const { restaurantId } = await requireActionPermission("m04_carte", "delete");
+  const supabase = await createClient();
   const { error } = await supabase
     .from("menu_categories")
     .delete()
-    .eq("id", id);
+    .eq("id", id)
+    .eq("restaurant_id", restaurantId);
   if (error) throw error;
 }
 
@@ -154,21 +139,25 @@ export async function deleteCategory(id: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function getProducts(): Promise<ProductRow[]> {
-  const supabase = await getSupabase();
+  const { restaurantId } = await requireActionPermission("m04_carte", "read");
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("products")
     .select("*")
+    .eq("restaurant_id", restaurantId)
     .order("sort_order", { ascending: true });
   if (error) throw error;
   return data ?? [];
 }
 
 export async function getProduct(id: string): Promise<ProductRow | null> {
-  const supabase = await getSupabase();
+  const { restaurantId } = await requireActionPermission("m04_carte", "read");
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("products")
     .select("*")
     .eq("id", id)
+    .eq("restaurant_id", restaurantId)
     .single();
   if (error) return null;
   return data;
@@ -177,19 +166,12 @@ export async function getProduct(id: string): Promise<ProductRow | null> {
 export async function createProduct(
   product: Omit<ProductInsert, "restaurant_id">
 ): Promise<ProductRow> {
-  const supabase = await getSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("restaurant_id")
-    .eq("id", user!.id)
-    .single();
+  const { restaurantId } = await requireActionPermission("m04_carte", "write");
+  const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("products")
-    .insert({ ...product, restaurant_id: profile!.restaurant_id! })
+    .insert({ ...product, restaurant_id: restaurantId })
     .select()
     .single();
   if (error) throw error;
@@ -200,11 +182,13 @@ export async function updateProduct(
   id: string,
   updates: ProductUpdate
 ): Promise<ProductRow> {
-  const supabase = await getSupabase();
+  const { restaurantId } = await requireActionPermission("m04_carte", "write");
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("products")
     .update({ ...updates, updated_at: new Date().toISOString() })
     .eq("id", id)
+    .eq("restaurant_id", restaurantId)
     .select()
     .single();
   if (error) throw error;
@@ -215,17 +199,24 @@ export async function toggleProductAvailability(
   id: string,
   isAvailable: boolean
 ): Promise<void> {
-  const supabase = await getSupabase();
+  const { restaurantId } = await requireActionPermission("m04_carte", "write");
+  const supabase = await createClient();
   const { error } = await supabase
     .from("products")
     .update({ is_available: isAvailable, updated_at: new Date().toISOString() })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("restaurant_id", restaurantId);
   if (error) throw error;
 }
 
 export async function deleteProduct(id: string): Promise<void> {
-  const supabase = await getSupabase();
-  const { error } = await supabase.from("products").delete().eq("id", id);
+  const { restaurantId } = await requireActionPermission("m04_carte", "delete");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("products")
+    .delete()
+    .eq("id", id)
+    .eq("restaurant_id", restaurantId);
   if (error) throw error;
 }
 
@@ -234,11 +225,13 @@ export async function deleteProduct(id: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function getRecipes(): Promise<RecipeWithIngredients[]> {
-  const supabase = await getSupabase();
+  const { restaurantId } = await requireActionPermission("m04_carte", "read");
+  const supabase = await createClient();
 
   const { data: recipes, error: recipesError } = await supabase
     .from("recipes")
     .select("*")
+    .eq("restaurant_id", restaurantId)
     .order("name", { ascending: true });
   if (recipesError) throw recipesError;
   if (!recipes || recipes.length === 0) return [];
@@ -273,12 +266,14 @@ export async function getRecipes(): Promise<RecipeWithIngredients[]> {
 export async function getRecipe(
   id: string
 ): Promise<RecipeWithIngredients | null> {
-  const supabase = await getSupabase();
+  const { restaurantId } = await requireActionPermission("m04_carte", "read");
+  const supabase = await createClient();
 
   const { data: recipe, error } = await supabase
     .from("recipes")
     .select("*")
     .eq("id", id)
+    .eq("restaurant_id", restaurantId)
     .single();
   if (error) return null;
 
@@ -305,19 +300,12 @@ export async function createRecipe(
   recipe: Omit<RecipeInsert, "restaurant_id">,
   ingredients: Omit<RecipeIngredientInsert, "recipe_id">[]
 ): Promise<RecipeWithIngredients> {
-  const supabase = await getSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("restaurant_id")
-    .eq("id", user!.id)
-    .single();
+  const { restaurantId } = await requireActionPermission("m04_carte", "write");
+  const supabase = await createClient();
 
   const { data: newRecipe, error } = await supabase
     .from("recipes")
-    .insert({ ...recipe, restaurant_id: profile!.restaurant_id! })
+    .insert({ ...recipe, restaurant_id: restaurantId })
     .select()
     .single();
   if (error) throw error;
@@ -346,15 +334,27 @@ export async function updateRecipe(
   recipe: Database["public"]["Tables"]["recipes"]["Update"],
   ingredients?: Omit<RecipeIngredientInsert, "recipe_id">[]
 ): Promise<void> {
-  const supabase = await getSupabase();
+  const { restaurantId } = await requireActionPermission("m04_carte", "write");
+  const supabase = await createClient();
+
+  // Verify ownership before any mutation
+  const { data: existing, error: fetchError } = await supabase
+    .from("recipes")
+    .select("id")
+    .eq("id", id)
+    .eq("restaurant_id", restaurantId)
+    .single();
+  if (fetchError || !existing) throw new Error("Recette introuvable");
 
   const { error } = await supabase
     .from("recipes")
     .update({ ...recipe, updated_at: new Date().toISOString() })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("restaurant_id", restaurantId);
   if (error) throw error;
 
   if (ingredients !== undefined) {
+    // Safe: recipe ownership verified above, so recipe_id belongs to this tenant
     await supabase.from("recipe_ingredients").delete().eq("recipe_id", id);
     if (ingredients.length > 0) {
       const { error: ingError } = await supabase
@@ -372,8 +372,13 @@ export async function updateRecipe(
 }
 
 export async function deleteRecipe(id: string): Promise<void> {
-  const supabase = await getSupabase();
-  const { error } = await supabase.from("recipes").delete().eq("id", id);
+  const { restaurantId } = await requireActionPermission("m04_carte", "delete");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("recipes")
+    .delete()
+    .eq("id", id)
+    .eq("restaurant_id", restaurantId);
   if (error) throw error;
 }
 
@@ -382,11 +387,13 @@ export async function deleteRecipe(id: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function getMenus(): Promise<MenuWithItems[]> {
-  const supabase = await getSupabase();
+  const { restaurantId } = await requireActionPermission("m04_carte", "read");
+  const supabase = await createClient();
 
   const { data: menus, error: menusError } = await supabase
     .from("menus")
     .select("*")
+    .eq("restaurant_id", restaurantId)
     .order("sort_order", { ascending: true });
   if (menusError) throw menusError;
   if (!menus || menus.length === 0) return [];
@@ -425,12 +432,14 @@ export async function getMenus(): Promise<MenuWithItems[]> {
 }
 
 export async function getMenu(id: string): Promise<MenuWithItems | null> {
-  const supabase = await getSupabase();
+  const { restaurantId } = await requireActionPermission("m04_carte", "read");
+  const supabase = await createClient();
 
   const { data: menu, error } = await supabase
     .from("menus")
     .select("*")
     .eq("id", id)
+    .eq("restaurant_id", restaurantId)
     .single();
   if (error) return null;
 
@@ -465,17 +474,24 @@ export async function toggleMenuAvailability(
   id: string,
   isAvailable: boolean
 ): Promise<void> {
-  const supabase = await getSupabase();
+  const { restaurantId } = await requireActionPermission("m04_carte", "write");
+  const supabase = await createClient();
   const { error } = await supabase
     .from("menus")
     .update({ is_available: isAvailable, updated_at: new Date().toISOString() })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("restaurant_id", restaurantId);
   if (error) throw error;
 }
 
 export async function deleteMenu(id: string): Promise<void> {
-  const supabase = await getSupabase();
-  const { error } = await supabase.from("menus").delete().eq("id", id);
+  const { restaurantId } = await requireActionPermission("m04_carte", "delete");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("menus")
+    .delete()
+    .eq("id", id)
+    .eq("restaurant_id", restaurantId);
   if (error) throw error;
 }
 
@@ -484,15 +500,21 @@ export async function deleteMenu(id: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function getCarteStats(): Promise<CarteStats> {
-  const supabase = await getSupabase();
+  const { restaurantId } = await requireActionPermission("m04_carte", "read");
+  const supabase = await createClient();
 
-  const { data: products } = await supabase.from("products").select("*");
+  const { data: products } = await supabase
+    .from("products")
+    .select("*")
+    .eq("restaurant_id", restaurantId);
   const { count: recipeCount } = await supabase
     .from("recipes")
-    .select("*", { count: "exact", head: true });
+    .select("*", { count: "exact", head: true })
+    .eq("restaurant_id", restaurantId);
   const { count: menuCount } = await supabase
     .from("menus")
-    .select("*", { count: "exact", head: true });
+    .select("*", { count: "exact", head: true })
+    .eq("restaurant_id", restaurantId);
 
   const allProducts = products ?? [];
   const withCost = allProducts.filter(

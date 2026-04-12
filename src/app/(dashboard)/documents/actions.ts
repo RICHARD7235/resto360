@@ -152,6 +152,15 @@ export async function addVersion(
       return { ok: false, error: "Fichier requis." };
     }
 
+    // 0. Verify document belongs to restaurant
+    const { data: docCheck } = await supabase
+      .from("documents")
+      .select("id")
+      .eq("id", documentId)
+      .eq("restaurant_id", restaurantId)
+      .single();
+    if (!docCheck) return { ok: false, error: "Document introuvable." };
+
     // 1. SELECT max(version_number)
     const { data: maxRow, error: maxErr } = await supabase
       .from("document_versions")
@@ -201,7 +210,8 @@ export async function addVersion(
         current_version_id: versionId,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", documentId);
+      .eq("id", documentId)
+      .eq("restaurant_id", restaurantId);
     if (updErr) return { ok: false, error: updErr.message };
 
     revalidatePath("/documents");
@@ -228,12 +238,13 @@ export async function updateDocument(
   }
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    await requirePermission("m12_documents", "write");
+    const { restaurantId } = await requirePermission("m12_documents", "write");
     const supabase = await untyped();
     const { error } = await supabase
       .from("documents")
       .update({ ...patch, updated_at: new Date().toISOString() })
-      .eq("id", id);
+      .eq("id", id)
+      .eq("restaurant_id", restaurantId);
     if (error) return { ok: false, error: error.message };
     revalidatePath("/documents");
     revalidatePath("/documents/bibliotheque");
@@ -249,10 +260,18 @@ export async function deleteDocument(
   id: string
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    await requirePermission("m12_documents", "write");
+    const { restaurantId } = await requirePermission("m12_documents", "delete");
     const supabase = await untyped();
 
-    // 1. SELECT all versions
+    // 1. SELECT all versions (via document ownership check)
+    const { data: doc } = await supabase
+      .from("documents")
+      .select("id")
+      .eq("id", id)
+      .eq("restaurant_id", restaurantId)
+      .single();
+    if (!doc) return { ok: false, error: "Document introuvable." };
+
     const { data: versions, error: vErr } = await supabase
       .from("document_versions")
       .select("storage_path")
@@ -267,7 +286,8 @@ export async function deleteDocument(
     await supabase
       .from("documents")
       .update({ current_version_id: null })
-      .eq("id", id);
+      .eq("id", id)
+      .eq("restaurant_id", restaurantId);
 
     // 3. Delete files
     try {
@@ -280,7 +300,8 @@ export async function deleteDocument(
     const { error: delErr } = await supabase
       .from("documents")
       .delete()
-      .eq("id", id);
+      .eq("id", id)
+      .eq("restaurant_id", restaurantId);
     if (delErr) return { ok: false, error: delErr.message };
 
     revalidatePath("/documents");
@@ -378,15 +399,25 @@ export async function getDownloadUrl(
   versionId: string
 ): Promise<{ ok: boolean; url?: string; error?: string }> {
   try {
-    await requirePermission("m12_documents", "write");
+    const { restaurantId } = await requirePermission("m12_documents", "read");
     const supabase = await untyped();
     const { data, error } = await supabase
       .from("document_versions")
-      .select("storage_path")
+      .select("storage_path, document_id")
       .eq("id", versionId)
       .single();
     if (error || !data) {
       return { ok: false, error: error?.message ?? "Version introuvable." };
+    }
+    // Verify document belongs to restaurant
+    const { data: docCheck } = await supabase
+      .from("documents")
+      .select("id")
+      .eq("id", (data as { document_id: string }).document_id)
+      .eq("restaurant_id", restaurantId)
+      .single();
+    if (!docCheck) {
+      return { ok: false, error: "Document introuvable." };
     }
     const path = (data as { storage_path: string }).storage_path;
     const url = await getSignedUrl(path, 300);

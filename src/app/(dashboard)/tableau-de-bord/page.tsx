@@ -1,37 +1,25 @@
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { requirePermission } from "@/lib/rbac";
 import { KpiCards } from "@/components/modules/dashboard/kpi-cards";
 import { RevenueChart } from "@/components/modules/dashboard/revenue-chart";
 import { RecentReservations } from "@/components/modules/dashboard/recent-reservations";
 import { StockAlerts } from "@/components/modules/dashboard/stock-alerts";
 
 export default async function DashboardPage() {
+  const { restaurantId } = await requirePermission("m01_dashboard", "read");
+
   const supabase = await createClient();
 
+  // Récupérer le full_name pour l'affichage
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/connexion");
-
-  // Récupérer le restaurant_id du profil utilisateur
   const { data: profile } = await supabase
     .from("profiles")
-    .select("restaurant_id, full_name")
-    .eq("id", user.id)
+    .select("full_name")
+    .eq("id", user!.id)
     .single();
-
-  const restaurantId = profile?.restaurant_id;
-
-  if (!restaurantId) {
-    return (
-      <div className="flex items-center justify-center h-[60vh]">
-        <p className="text-muted-foreground">
-          Aucun restaurant associé à votre compte. Contactez l&apos;administrateur.
-        </p>
-      </div>
-    );
-  }
 
   const today = new Date().toISOString().slice(0, 10);
   const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);

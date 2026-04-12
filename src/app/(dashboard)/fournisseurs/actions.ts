@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { requireActionPermission } from "@/lib/rbac";
 import type { Tables, Database } from "@/types/database.types";
 
 // ---------------------------------------------------------------------------
@@ -40,36 +40,13 @@ export interface SupplierStats {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-async function getUserRestaurantId(): Promise<string> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/connexion");
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("restaurant_id")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile?.restaurant_id) {
-    throw new Error("Aucun restaurant associé à votre compte.");
-  }
-  return profile.restaurant_id;
-}
-
-// ---------------------------------------------------------------------------
 // Queries
 // ---------------------------------------------------------------------------
 
 export async function getSuppliers(
   filters: SupplierFilters = {}
 ): Promise<SupplierWithCatalogCount[]> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m06_fournisseurs", "read");
   const supabase = await createClient();
 
   let query = supabase
@@ -114,7 +91,7 @@ export async function getSuppliers(
 export async function getSupplier(
   id: string
 ): Promise<{ supplier: SupplierRow; catalogItems: CatalogItemRow[] }> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m06_fournisseurs", "read");
   const supabase = await createClient();
 
   const { data: supplier, error } = await supabase
@@ -137,7 +114,7 @@ export async function getSupplier(
 }
 
 export async function getSupplierStats(): Promise<SupplierStats> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m06_fournisseurs", "read");
   const supabase = await createClient();
 
   const { data: suppliers } = await supabase
@@ -171,7 +148,7 @@ export async function getSupplierStats(): Promise<SupplierStats> {
 export async function createSupplier(
   data: Omit<SupplierInsert, "id" | "restaurant_id" | "created_at" | "updated_at">
 ): Promise<SupplierRow> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m06_fournisseurs", "write");
   const supabase = await createClient();
 
   const { data: supplier, error } = await supabase
@@ -188,7 +165,7 @@ export async function updateSupplier(
   id: string,
   data: Omit<SupplierUpdate, "id" | "restaurant_id" | "created_at">
 ): Promise<SupplierRow> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m06_fournisseurs", "write");
   const supabase = await createClient();
 
   const { data: supplier, error } = await supabase
@@ -204,7 +181,7 @@ export async function updateSupplier(
 }
 
 export async function toggleSupplierActive(id: string): Promise<SupplierRow> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m06_fournisseurs", "write");
   const supabase = await createClient();
 
   const { data: current } = await supabase
@@ -232,8 +209,18 @@ export async function createCatalogItem(
   supplierId: string,
   data: Omit<CatalogItemInsert, "id" | "supplier_id" | "created_at" | "updated_at">
 ): Promise<CatalogItemRow> {
-  await getUserRestaurantId(); // Auth check
+  const { restaurantId } = await requireActionPermission("m06_fournisseurs", "write");
   const supabase = await createClient();
+
+  // Verify supplier belongs to this restaurant
+  const { data: supplier } = await supabase
+    .from("suppliers")
+    .select("id")
+    .eq("id", supplierId)
+    .eq("restaurant_id", restaurantId)
+    .single();
+
+  if (!supplier) throw new Error("Fournisseur introuvable.");
 
   const { data: item, error } = await supabase
     .from("supplier_catalog_items")
@@ -249,8 +236,26 @@ export async function updateCatalogItem(
   id: string,
   data: Omit<CatalogItemUpdate, "id" | "supplier_id" | "created_at">
 ): Promise<CatalogItemRow> {
-  await getUserRestaurantId(); // Auth check
+  const { restaurantId } = await requireActionPermission("m06_fournisseurs", "write");
   const supabase = await createClient();
+
+  // Verify catalog item belongs to a supplier of this restaurant
+  const { data: catalogItem } = await supabase
+    .from("supplier_catalog_items")
+    .select("supplier_id")
+    .eq("id", id)
+    .single();
+
+  if (!catalogItem) throw new Error("Article introuvable.");
+
+  const { data: supplier } = await supabase
+    .from("suppliers")
+    .select("id")
+    .eq("id", catalogItem.supplier_id)
+    .eq("restaurant_id", restaurantId)
+    .single();
+
+  if (!supplier) throw new Error("Fournisseur introuvable.");
 
   const { data: item, error } = await supabase
     .from("supplier_catalog_items")
@@ -264,8 +269,26 @@ export async function updateCatalogItem(
 }
 
 export async function deleteCatalogItem(id: string): Promise<void> {
-  await getUserRestaurantId(); // Auth check
+  const { restaurantId } = await requireActionPermission("m06_fournisseurs", "delete");
   const supabase = await createClient();
+
+  // Verify catalog item belongs to a supplier of this restaurant
+  const { data: catalogItem } = await supabase
+    .from("supplier_catalog_items")
+    .select("supplier_id")
+    .eq("id", id)
+    .single();
+
+  if (!catalogItem) throw new Error("Article introuvable.");
+
+  const { data: supplier } = await supabase
+    .from("suppliers")
+    .select("id")
+    .eq("id", catalogItem.supplier_id)
+    .eq("restaurant_id", restaurantId)
+    .single();
+
+  if (!supplier) throw new Error("Fournisseur introuvable.");
 
   const { error } = await supabase
     .from("supplier_catalog_items")

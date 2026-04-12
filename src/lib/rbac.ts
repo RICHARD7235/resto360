@@ -93,6 +93,38 @@ export interface ModulePermissions {
 /**
  * Get all permissions for a role in a restaurant (for sidebar/admin UI).
  */
+/**
+ * Guard for Server Actions: require auth + permission, throw Error (not redirect).
+ * Returns { restaurantId, role } on success.
+ * Use this in every server action that mutates data.
+ */
+export async function requireActionPermission(
+  module: AppModule,
+  action: PermissionAction
+): Promise<{ restaurantId: string; role: string }> {
+  const ctx = await getUserContext();
+  if (!ctx) throw new Error("Non authentifié");
+
+  const supabase = await createClient();
+  const column = `can_${action}` as const;
+
+  const { data } = await supabase
+    .from("role_permissions")
+    .select(column)
+    .eq("restaurant_id", ctx.restaurantId)
+    .eq("role", ctx.role)
+    .eq("module", module)
+    .single();
+
+  const allowed = data ? (data as Record<string, boolean>)[column] === true : false;
+
+  if (!allowed) {
+    throw new Error("Permission refusée");
+  }
+
+  return ctx;
+}
+
 export async function getPermissionsForRole(
   restaurantId: string,
   role: string

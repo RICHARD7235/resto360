@@ -4,7 +4,7 @@
 
 import { createHash } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
-import { requirePermission } from "@/lib/rbac";
+import { requirePermission, requireActionPermission } from "@/lib/rbac";
 import type { QhsTaskTemplate } from "./types";
 
 const hashPin = (pin: string) =>
@@ -20,13 +20,25 @@ export interface ValidateTaskInput {
 export async function validateTask(
   input: ValidateTaskInput,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { restaurantId } = await requireActionPermission("m13_qualite", "write");
   const supabase = await createClient();
 
-  // 1. Charger l'instance
+  // Validate photo file if provided
+  if (input.photoFile) {
+    if (!input.photoFile.type.startsWith("image/")) {
+      return { ok: false, error: "Seules les images sont autorisées" };
+    }
+    if (input.photoFile.size > 5 * 1024 * 1024) {
+      return { ok: false, error: "Photo trop volumineuse (max 5 Mo)" };
+    }
+  }
+
+  // 1. Charger l'instance (avec vérification tenant)
   const { data: inst, error: e1 } = await (supabase as any)
     .from("qhs_task_instances")
     .select("id, template_id, restaurant_id, statut")
     .eq("id", input.instanceId)
+    .eq("restaurant_id", restaurantId)
     .maybeSingle();
   if (e1 || !inst) return { ok: false, error: "Instance introuvable" };
   if (inst.statut === "validee")
@@ -142,10 +154,13 @@ export async function closeNonConformity(
 export async function upsertTemplate(
   template: Partial<QhsTaskTemplate>,
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const { restaurantId } = await requireActionPermission("m13_qualite", "write");
   const supabase = await createClient();
+  // Force restaurant_id from server context, never trust client payload
+  const safeTemplate = { ...template, restaurant_id: restaurantId };
   const { data, error } = await (supabase as any)
     .from("qhs_task_templates")
-    .upsert(template)
+    .upsert(safeTemplate)
     .select("id")
     .single();
   if (error || !data)

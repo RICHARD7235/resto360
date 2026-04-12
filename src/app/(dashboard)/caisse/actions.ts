@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { redirect } from "next/navigation";
+import { requireActionPermission } from "@/lib/rbac";
 import type {
   CashRegisterClosing,
   CashRegisterClosingInsert,
@@ -29,29 +29,12 @@ async function createUntypedClient(): Promise<UntypedClient> {
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function getUserRestaurantId(): Promise<string> {
-  const supabase = await createUntypedClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/connexion");
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("restaurant_id")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile || !profile.restaurant_id) redirect("/connexion");
-  return profile.restaurant_id as string;
-}
-
 async function getCurrentUserId(): Promise<string> {
   const supabase = await createUntypedClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/connexion");
+  if (!user) throw new Error("Non authentifié");
   return user.id;
 }
 
@@ -63,7 +46,7 @@ export async function getClosings(filters?: {
   dateFrom?: string;
   dateTo?: string;
 }): Promise<CashRegisterClosing[]> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m08_caisse", "read");
   const supabase = await createUntypedClient();
 
   let query = supabase
@@ -81,7 +64,7 @@ export async function getClosings(filters?: {
 }
 
 export async function getClosingByDate(date: string): Promise<CashRegisterClosing | null> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m08_caisse", "read");
   const supabase = await createUntypedClient();
 
   const { data, error } = await supabase
@@ -98,7 +81,7 @@ export async function getClosingByDate(date: string): Promise<CashRegisterClosin
 export async function createClosing(
   input: Omit<CashRegisterClosingInsert, "restaurant_id" | "created_by">
 ): Promise<CashRegisterClosing> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m08_caisse", "write");
   const userId = await getCurrentUserId();
   const supabase = await createUntypedClient();
 
@@ -133,7 +116,7 @@ export async function createClosing(
 export async function importClosings(
   rows: Omit<CashRegisterClosingInsert, "restaurant_id" | "created_by">[]
 ): Promise<{ inserted: number; skipped: number }> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m08_caisse", "write");
   const userId = await getCurrentUserId();
   const supabase = await createUntypedClient();
 
@@ -182,7 +165,7 @@ export async function updateClosing(
   id: string,
   updates: Partial<CashRegisterClosingInsert>
 ): Promise<CashRegisterClosing> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m08_caisse", "write");
   const supabase = await createUntypedClient();
 
   const { data, error } = await supabase
@@ -207,7 +190,7 @@ export async function updateClosing(
 }
 
 export async function deleteClosing(id: string): Promise<void> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m08_caisse", "delete");
   const supabase = await createUntypedClient();
 
   await supabase
@@ -231,7 +214,7 @@ export async function deleteClosing(id: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function getBankStatements(): Promise<BankStatement[]> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m08_caisse", "read");
   const supabase = await createUntypedClient();
 
   const { data, error } = await supabase
@@ -250,7 +233,7 @@ export async function getBankTransactions(filters?: {
   dateFrom?: string;
   dateTo?: string;
 }): Promise<BankTransaction[]> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m08_caisse", "read");
   const supabase = await createUntypedClient();
 
   let query = supabase
@@ -276,7 +259,7 @@ export async function importBankStatement(input: {
   fileName: string;
   transactions: { transaction_date: string; value_date: string | null; label: string; amount: number }[];
 }): Promise<{ statementId: string; transactionCount: number }> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m08_caisse", "write");
   const userId = await getCurrentUserId();
   const supabase = await createUntypedClient();
 
@@ -317,7 +300,7 @@ export async function categorizeTransaction(
   id: string,
   category: string
 ): Promise<void> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m08_caisse", "write");
   const supabase = await createUntypedClient();
 
   const { error } = await supabase
@@ -338,7 +321,7 @@ export async function getUnreconciledTransactions(): Promise<BankTransaction[]> 
 }
 
 export async function getUnreconciledClosings(): Promise<CashRegisterClosing[]> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m08_caisse", "read");
   const supabase = await createUntypedClient();
 
   const { data: reconciledTx } = await supabase
@@ -369,7 +352,7 @@ export async function reconcile(
   transactionId: string,
   closingId: string
 ): Promise<void> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m08_caisse", "write");
   const supabase = await createUntypedClient();
 
   const { error } = await supabase
@@ -386,7 +369,7 @@ export async function reconcile(
 }
 
 export async function unreconcile(transactionId: string): Promise<void> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m08_caisse", "write");
   const supabase = await createUntypedClient();
 
   const { error } = await supabase
@@ -433,7 +416,7 @@ export async function autoMatchTransactions(): Promise<{ matched: number }> {
 // ---------------------------------------------------------------------------
 
 export async function getVatPeriods(): Promise<VatPeriod[]> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m08_caisse", "read");
   const supabase = await createUntypedClient();
 
   const { data, error } = await supabase
@@ -450,7 +433,7 @@ export async function createVatPeriod(
   periodStart: string,
   periodEnd: string
 ): Promise<VatPeriod> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m08_caisse", "write");
   const supabase = await createUntypedClient();
 
   const { data, error } = await supabase
@@ -470,7 +453,7 @@ export async function createVatPeriod(
 }
 
 export async function recalculateVatPeriod(id: string): Promise<VatPeriod> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m08_caisse", "write");
   const supabase = await createUntypedClient();
 
   const { data: period } = await supabase
@@ -528,7 +511,7 @@ export async function recalculateVatPeriod(id: string): Promise<VatPeriod> {
 }
 
 export async function validateVatPeriod(id: string): Promise<VatPeriod> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m08_caisse", "write");
   const supabase = await createUntypedClient();
 
   await recalculateVatPeriod(id);
@@ -546,7 +529,7 @@ export async function validateVatPeriod(id: string): Promise<VatPeriod> {
 }
 
 export async function declareVatPeriod(id: string): Promise<VatPeriod> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m08_caisse", "write");
   const supabase = await createUntypedClient();
 
   const { data, error } = await supabase
@@ -571,7 +554,7 @@ export async function getTreasuryEntries(filters?: {
   dateFrom?: string;
   dateTo?: string;
 }): Promise<TreasuryEntry[]> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m08_caisse", "read");
   const supabase = await createUntypedClient();
 
   let query = supabase
@@ -610,7 +593,7 @@ export async function getTreasurySummary(filters?: {
 export async function createTreasuryEntry(
   input: Omit<TreasuryEntryInsert, "restaurant_id">
 ): Promise<TreasuryEntry> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m08_caisse", "write");
   const supabase = await createUntypedClient();
 
   const { data, error } = await supabase
@@ -627,7 +610,7 @@ export async function updateTreasuryEntry(
   id: string,
   updates: Partial<TreasuryEntryInsert>
 ): Promise<TreasuryEntry> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m08_caisse", "write");
   const supabase = await createUntypedClient();
 
   const { data, error } = await supabase
@@ -643,7 +626,7 @@ export async function updateTreasuryEntry(
 }
 
 export async function deleteTreasuryEntry(id: string): Promise<void> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m08_caisse", "delete");
   const supabase = await createUntypedClient();
 
   const { data: entry } = await supabase
@@ -678,7 +661,7 @@ export async function getDashboardKpis(): Promise<{
   missingClosings: number;
   unreconciledCount: number;
 }> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m08_caisse", "read");
   const supabase = await createUntypedClient();
 
   const today = new Date().toISOString().split("T")[0];
@@ -736,7 +719,7 @@ export async function getDashboardKpis(): Promise<{
 export async function getDailyRevenue(
   days: number = 30
 ): Promise<{ date: string; total_ttc: number }[]> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m08_caisse", "read");
   const supabase = await createUntypedClient();
 
   const startDate = new Date();
@@ -757,7 +740,7 @@ export async function getPaymentBreakdown(filters?: {
   dateFrom?: string;
   dateTo?: string;
 }): Promise<{ cb: number; cash: number; check: number; ticketResto: number; other: number }> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m08_caisse", "read");
   const supabase = await createUntypedClient();
 
   let query = supabase

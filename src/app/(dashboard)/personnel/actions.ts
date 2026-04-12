@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { requireActionPermission } from "@/lib/rbac";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   StaffMember,
@@ -101,7 +102,7 @@ async function getUserRestaurantId(): Promise<string> {
  * Used to scope queries on tables that don't have restaurant_id directly.
  */
 async function getRestaurantStaffIds(): Promise<string[]> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "read");
   const supabase = await createUntypedClient();
 
   const { data, error } = await supabase
@@ -125,7 +126,7 @@ async function getRestaurantStaffIds(): Promise<string[]> {
 export async function getStaffMembers(
   filters: StaffFilters = {}
 ): Promise<StaffMemberWithPosition[]> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "read");
   const supabase = await createUntypedClient();
 
   let query = supabase
@@ -209,7 +210,7 @@ export async function getStaffMembers(
 export async function getStaffMember(
   id: string
 ): Promise<StaffMemberWithPosition | null> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "read");
   const supabase = await createUntypedClient();
 
   const { data, error } = await supabase
@@ -265,7 +266,7 @@ export async function getStaffMember(
 export async function createStaffMember(
   data: StaffFormData
 ): Promise<StaffMember> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "write");
   const supabase = await createUntypedClient();
 
   const insertData: Record<string, unknown> = {
@@ -284,7 +285,9 @@ export async function createStaffMember(
     end_date: data.end_date || null,
     birth_date: data.birth_date || null,
     address: data.address || null,
-    social_security_number: data.social_security_number || null,
+    social_security_number: data.social_security_number
+      ? `***********${data.social_security_number.slice(-5)}`
+      : null,
     emergency_contact_name: data.emergency_contact_name || null,
     emergency_contact_phone: data.emergency_contact_phone || null,
     is_active: data.is_active,
@@ -309,7 +312,7 @@ export async function updateStaffMember(
   id: string,
   data: Partial<StaffFormData>
 ): Promise<StaffMember> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "write");
   const supabase = await createUntypedClient();
 
   // Build update object only with defined fields
@@ -339,8 +342,9 @@ export async function updateStaffMember(
     updateData.birth_date = data.birth_date || null;
   if (data.address !== undefined) updateData.address = data.address || null;
   if (data.social_security_number !== undefined)
-    updateData.social_security_number =
-      data.social_security_number || null;
+    updateData.social_security_number = data.social_security_number
+      ? `***********${data.social_security_number.slice(-5)}`
+      : null;
   if (data.emergency_contact_name !== undefined)
     updateData.emergency_contact_name =
       data.emergency_contact_name || null;
@@ -370,7 +374,7 @@ export async function toggleStaffActive(
   id: string,
   isActive: boolean
 ): Promise<void> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "write");
   const supabase = await createUntypedClient();
 
   const { error } = await supabase
@@ -391,7 +395,7 @@ export async function toggleStaffActive(
 // ---------------------------------------------------------------------------
 
 export async function getJobPositions(): Promise<JobPosition[]> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "read");
   const supabase = await createUntypedClient();
 
   const { data, error } = await supabase
@@ -419,7 +423,7 @@ export async function createJobPosition(input: {
   required_skills?: string[];
   reports_to_position_id?: string | null;
 }): Promise<JobPosition> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "write");
   const supabase = await createUntypedClient();
 
   const { data, error } = await supabase
@@ -461,7 +465,7 @@ export async function updateJobPosition(
     reports_to_position_id?: string | null;
   }
 ): Promise<JobPosition> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "write");
   const supabase = await createUntypedClient();
 
   const updateData: Record<string, unknown> = {
@@ -509,7 +513,7 @@ export async function updateJobPosition(
 export async function getScheduleWeek(
   weekStart: string
 ): Promise<ScheduleWeek | null> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "read");
   const supabase = await createUntypedClient();
 
   const { data, error } = await supabase
@@ -532,7 +536,7 @@ export async function getScheduleWeek(
 export async function createScheduleWeek(
   weekStart: string
 ): Promise<ScheduleWeek> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "write");
   const supabase = await createUntypedClient();
 
   const { data, error } = await supabase
@@ -555,7 +559,7 @@ export async function createScheduleWeek(
 }
 
 export async function publishScheduleWeek(id: string): Promise<void> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "write");
   const supabase = await createUntypedClient();
 
   const { error } = await supabase
@@ -581,7 +585,20 @@ export async function publishScheduleWeek(id: string): Promise<void> {
 export async function getShiftsForWeek(
   scheduleWeekId: string
 ): Promise<Shift[]> {
+  const { restaurantId } = await requireActionPermission("m07_personnel", "read");
   const supabase = await createUntypedClient();
+
+  // Verify schedule_week belongs to this restaurant
+  const { data: week, error: weekError } = await supabase
+    .from("schedule_weeks")
+    .select("id")
+    .eq("id", scheduleWeekId)
+    .eq("restaurant_id", restaurantId)
+    .single();
+
+  if (weekError || !week) {
+    throw new Error("Semaine introuvable ou acces refuse.");
+  }
 
   const { data, error } = await supabase
     .from("shifts")
@@ -603,7 +620,20 @@ export async function createShift(
   scheduleWeekId: string,
   data: ShiftFormData
 ): Promise<Shift> {
+  const { restaurantId } = await requireActionPermission("m07_personnel", "write");
   const supabase = await createUntypedClient();
+
+  // Verify schedule_week belongs to this restaurant
+  const { data: week, error: weekError } = await supabase
+    .from("schedule_weeks")
+    .select("id")
+    .eq("id", scheduleWeekId)
+    .eq("restaurant_id", restaurantId)
+    .single();
+
+  if (weekError || !week) {
+    throw new Error("Semaine introuvable ou acces refuse.");
+  }
 
   const { data: shift, error } = await supabase
     .from("shifts")
@@ -634,7 +664,30 @@ export async function updateShift(
   id: string,
   data: Partial<ShiftFormData>
 ): Promise<Shift> {
+  const { restaurantId } = await requireActionPermission("m07_personnel", "write");
   const supabase = await createUntypedClient();
+
+  // Verify the shift belongs to a schedule_week of this restaurant
+  const { data: existingShift, error: shiftError } = await supabase
+    .from("shifts")
+    .select("schedule_week_id")
+    .eq("id", id)
+    .single();
+
+  if (shiftError || !existingShift) {
+    throw new Error("Shift introuvable.");
+  }
+
+  const { data: week, error: weekError } = await supabase
+    .from("schedule_weeks")
+    .select("id")
+    .eq("id", existingShift.schedule_week_id)
+    .eq("restaurant_id", restaurantId)
+    .single();
+
+  if (weekError || !week) {
+    throw new Error("Shift introuvable ou acces refuse.");
+  }
 
   const updateData: Record<string, unknown> = {};
 
@@ -666,7 +719,30 @@ export async function updateShift(
 }
 
 export async function deleteShift(id: string): Promise<void> {
+  const { restaurantId } = await requireActionPermission("m07_personnel", "delete");
   const supabase = await createUntypedClient();
+
+  // Verify the shift belongs to a schedule_week of this restaurant
+  const { data: existingShift, error: shiftError } = await supabase
+    .from("shifts")
+    .select("schedule_week_id")
+    .eq("id", id)
+    .single();
+
+  if (shiftError || !existingShift) {
+    throw new Error("Shift introuvable.");
+  }
+
+  const { data: week, error: weekError } = await supabase
+    .from("schedule_weeks")
+    .select("id")
+    .eq("id", existingShift.schedule_week_id)
+    .eq("restaurant_id", restaurantId)
+    .single();
+
+  if (weekError || !week) {
+    throw new Error("Shift introuvable ou acces refuse.");
+  }
 
   const { error } = await supabase
     .from("shifts")
@@ -685,7 +761,7 @@ export async function deleteShift(id: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function getScheduleTemplates(): Promise<ScheduleTemplate[]> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "read");
   const supabase = await createUntypedClient();
 
   const { data, error } = await supabase
@@ -709,7 +785,7 @@ export async function getTemplateShifts(
   const supabase = await createUntypedClient();
 
   // Ensure the template belongs to the current restaurant
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "read");
   const { data: template, error: templateError } = await supabase
     .from("schedule_templates")
     .select("id")
@@ -741,7 +817,7 @@ export async function applyTemplate(
   templateId: string,
   weekStart: string
 ): Promise<ScheduleWeek> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "write");
   const supabase = await createUntypedClient();
 
   // 1. Get or create the schedule week
@@ -812,7 +888,7 @@ export async function applyTemplate(
 export async function getLeaveBalances(
   year?: number
 ): Promise<LeaveBalance[]> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "read");
   const supabase = await createUntypedClient();
 
   // leave_balances has no restaurant_id — filter via staff_members
@@ -852,7 +928,7 @@ export async function getLeaveBalances(
 export async function getLeaveRequests(
   filters: LeaveRequestFilters = {}
 ): Promise<LeaveRequest[]> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "read");
   const supabase = await createUntypedClient();
 
   // leave_requests has no restaurant_id — filter via staff_members
@@ -896,7 +972,7 @@ export async function getLeaveRequests(
 export async function createLeaveRequest(
   data: LeaveRequestFormData
 ): Promise<LeaveRequest> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "write");
   const supabase = await createUntypedClient();
 
   // Calculate duration in days
@@ -928,8 +1004,30 @@ export async function createLeaveRequest(
 }
 
 export async function approveLeaveRequest(id: string): Promise<void> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "write");
   const supabase = await createUntypedClient();
+
+  // Verify the leave_request belongs to a staff member of this restaurant
+  const { data: request, error: reqError } = await supabase
+    .from("leave_requests")
+    .select("staff_member_id")
+    .eq("id", id)
+    .single();
+
+  if (reqError || !request) {
+    throw new Error("Demande de conge introuvable.");
+  }
+
+  const { data: staff, error: staffError } = await supabase
+    .from("staff_members")
+    .select("id")
+    .eq("id", request.staff_member_id)
+    .eq("restaurant_id", restaurantId)
+    .single();
+
+  if (staffError || !staff) {
+    throw new Error("Demande de conge introuvable ou acces refuse.");
+  }
 
   const {
     data: { user },
@@ -952,7 +1050,30 @@ export async function approveLeaveRequest(id: string): Promise<void> {
 }
 
 export async function rejectLeaveRequest(id: string): Promise<void> {
+  const { restaurantId } = await requireActionPermission("m07_personnel", "write");
   const supabase = await createUntypedClient();
+
+  // Verify the leave_request belongs to a staff member of this restaurant
+  const { data: request, error: reqError } = await supabase
+    .from("leave_requests")
+    .select("staff_member_id")
+    .eq("id", id)
+    .single();
+
+  if (reqError || !request) {
+    throw new Error("Demande de conge introuvable.");
+  }
+
+  const { data: staff, error: staffError } = await supabase
+    .from("staff_members")
+    .select("id")
+    .eq("id", request.staff_member_id)
+    .eq("restaurant_id", restaurantId)
+    .single();
+
+  if (staffError || !staff) {
+    throw new Error("Demande de conge introuvable ou acces refuse.");
+  }
 
   const { error } = await supabase
     .from("leave_requests")
@@ -976,7 +1097,7 @@ export async function rejectLeaveRequest(id: string): Promise<void> {
 export async function getTimeEntries(
   filters: TimeEntryFilters = {}
 ): Promise<TimeEntry[]> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "read");
   const supabase = await createUntypedClient();
 
   let query = supabase
@@ -1011,7 +1132,7 @@ export async function getTimeEntries(
 export async function createTimeEntry(
   data: TimeEntryFormData
 ): Promise<TimeEntry> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "write");
   const supabase = await createUntypedClient();
 
   const { data: entry, error } = await supabase
@@ -1043,7 +1164,7 @@ export async function updateTimeEntry(
   id: string,
   data: Partial<TimeEntryFormData>
 ): Promise<TimeEntry> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "write");
   const supabase = await createUntypedClient();
 
   const updateData: Record<string, unknown> = {};
@@ -1078,7 +1199,7 @@ export async function updateTimeEntry(
 }
 
 export async function validateTimeEntry(id: string): Promise<void> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "write");
   const supabase = await createUntypedClient();
 
   const {
@@ -1107,7 +1228,7 @@ export async function validateTimeEntry(id: string): Promise<void> {
 export async function getPayrollAdvances(
   staffMemberId?: string
 ): Promise<PayrollAdvance[]> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "read");
   const supabase = await createUntypedClient();
 
   let query = supabase
@@ -1134,7 +1255,7 @@ export async function getPayrollAdvances(
 export async function createPayrollAdvance(
   data: PayrollAdvanceFormData
 ): Promise<PayrollAdvance> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "write");
   const supabase = await createUntypedClient();
 
   const { data: advance, error } = await supabase
@@ -1166,7 +1287,7 @@ export async function createPayrollAdvance(
 export async function getStaffDocuments(
   filters: StaffDocumentFilters = {}
 ): Promise<StaffDocument[]> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "read");
   const supabase = await createUntypedClient();
 
   let query = supabase
@@ -1197,7 +1318,7 @@ export async function getStaffDocuments(
 export async function createStaffDocument(
   data: StaffDocumentFormData
 ): Promise<StaffDocument> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "write");
   const supabase = await createUntypedClient();
 
   const { data: doc, error } = await supabase
@@ -1224,7 +1345,7 @@ export async function createStaffDocument(
 }
 
 export async function deleteStaffDocument(id: string): Promise<void> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "delete");
   const supabase = await createUntypedClient();
 
   const { error } = await supabase
@@ -1245,7 +1366,7 @@ export async function deleteStaffDocument(id: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function getPersonnelDashboard(): Promise<PersonnelDashboard> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "read");
   const supabase = await createUntypedClient();
 
   const today = new Date().toISOString().split("T")[0];
@@ -1314,7 +1435,7 @@ export async function getPersonnelDashboard(): Promise<PersonnelDashboard> {
 }
 
 export async function getTodayShifts(): Promise<Shift[]> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "read");
   const supabase = await createUntypedClient();
 
   const today = new Date().toISOString().split("T")[0];
@@ -1348,7 +1469,7 @@ export async function getTodayShifts(): Promise<Shift[]> {
 // ---------------------------------------------------------------------------
 
 export async function setDefaultTemplate(templateId: string): Promise<void> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "write");
   const supabase = await createUntypedClient();
 
   // Unset all existing defaults for this restaurant
@@ -1378,7 +1499,7 @@ export async function setDefaultTemplate(templateId: string): Promise<void> {
 }
 
 export async function deleteScheduleTemplate(templateId: string): Promise<void> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m07_personnel", "delete");
   const supabase = await createUntypedClient();
 
   // Verify ownership

@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { requireActionPermission } from "@/lib/rbac";
 import type { ReviewInsert, ReviewSource } from "@/types/reviews";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -13,23 +13,8 @@ async function untyped(): Promise<UntypedClient> {
   return (await createClient()) as unknown as UntypedClient;
 }
 
-async function getCtx(): Promise<{ userId: string; restaurantId: string }> {
-  const supabase = await untyped();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/connexion");
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("restaurant_id")
-    .eq("id", user.id)
-    .single();
-  if (!profile?.restaurant_id) redirect("/connexion");
-  return { userId: user.id, restaurantId: profile.restaurant_id as string };
-}
-
 export async function createReview(input: Omit<ReviewInsert, "restaurant_id">) {
-  const { restaurantId } = await getCtx();
+  const { restaurantId } = await requireActionPermission("m09_avis", "write");
   const supabase = await untyped();
   const { error } = await supabase.from("reviews").insert({
     ...input,
@@ -40,32 +25,40 @@ export async function createReview(input: Omit<ReviewInsert, "restaurant_id">) {
 }
 
 export async function respondToReview(reviewId: string, response: string) {
-  const { userId } = await getCtx();
+  const { restaurantId } = await requireActionPermission("m09_avis", "write");
   if (!response.trim()) throw new Error("Réponse vide");
   const supabase = await untyped();
+  // Get current user for responded_by
+  const { data: { user } } = await supabase.auth.getUser();
   const { error } = await supabase
     .from("reviews")
-    .update({ response: response.trim(), responded_by: userId })
-    .eq("id", reviewId);
+    .update({ response: response.trim(), responded_by: user!.id })
+    .eq("id", reviewId)
+    .eq("restaurant_id", restaurantId);
   if (error) throw error;
   revalidatePath("/avis");
 }
 
 export async function archiveReview(reviewId: string) {
-  await getCtx();
+  const { restaurantId } = await requireActionPermission("m09_avis", "write");
   const supabase = await untyped();
   const { error } = await supabase
     .from("reviews")
     .update({ status: "archived" })
-    .eq("id", reviewId);
+    .eq("id", reviewId)
+    .eq("restaurant_id", restaurantId);
   if (error) throw error;
   revalidatePath("/avis");
 }
 
 export async function deleteReview(reviewId: string) {
-  await getCtx();
+  const { restaurantId } = await requireActionPermission("m09_avis", "delete");
   const supabase = await untyped();
-  const { error } = await supabase.from("reviews").delete().eq("id", reviewId);
+  const { error } = await supabase
+    .from("reviews")
+    .delete()
+    .eq("id", reviewId)
+    .eq("restaurant_id", restaurantId);
   if (error) throw error;
   revalidatePath("/avis");
 }
@@ -79,7 +72,7 @@ type CsvRow = {
 };
 
 export async function importReviewsCsv(rows: CsvRow[]) {
-  const { restaurantId } = await getCtx();
+  const { restaurantId } = await requireActionPermission("m09_avis", "write");
   const supabase = await untyped();
   const validSources: ReviewSource[] = ["manual", "google", "tripadvisor", "thefork", "facebook"];
   const payload = rows

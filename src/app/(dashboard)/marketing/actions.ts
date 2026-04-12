@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { requireActionPermission } from "@/lib/rbac";
 import type {
   MarketingCampaignInsert,
   MarketingPromotionInsert,
@@ -17,32 +17,18 @@ async function untyped(): Promise<UntypedClient> {
   return (await createClient()) as unknown as UntypedClient;
 }
 
-async function getCtx(): Promise<{ userId: string; restaurantId: string }> {
-  const supabase = await untyped();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/connexion");
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("restaurant_id")
-    .eq("id", user.id)
-    .single();
-  if (!profile?.restaurant_id) redirect("/connexion");
-  return { userId: user.id, restaurantId: profile.restaurant_id as string };
-}
-
 // ==================== CAMPAIGNS ====================
 
 export async function createCampaign(
   input: Omit<MarketingCampaignInsert, "restaurant_id">,
 ) {
-  const { userId, restaurantId } = await getCtx();
+  const { restaurantId } = await requireActionPermission("m10_marketing", "write");
   const supabase = await untyped();
+  const { data: { user } } = await supabase.auth.getUser();
   const { error } = await supabase.from("marketing_campaigns").insert({
     ...input,
     restaurant_id: restaurantId,
-    created_by: userId,
+    created_by: user!.id,
   });
   if (error) throw error;
   revalidatePath("/marketing");
@@ -53,25 +39,27 @@ export async function updateCampaign(
   id: string,
   patch: Partial<Omit<MarketingCampaignInsert, "restaurant_id">>,
 ) {
-  await getCtx();
+  const { restaurantId } = await requireActionPermission("m10_marketing", "write");
   const supabase = await untyped();
   const { error } = await supabase
     .from("marketing_campaigns")
     .update(patch)
-    .eq("id", id);
+    .eq("id", id)
+    .eq("restaurant_id", restaurantId);
   if (error) throw error;
   revalidatePath("/marketing");
   revalidatePath("/marketing/campagnes");
 }
 
 export async function markCampaignSent(id: string) {
-  await getCtx();
+  const { restaurantId } = await requireActionPermission("m10_marketing", "write");
   const supabase = await untyped();
   // Simulation : passage en "sent" avec stats factices mais cohérentes
   const { data: c } = await supabase
     .from("marketing_campaigns")
     .select("recipients_count")
     .eq("id", id)
+    .eq("restaurant_id", restaurantId)
     .single();
   const recipients = Math.max(50, (c?.recipients_count as number) || 200);
   const opens = Math.round(recipients * (0.35 + Math.random() * 0.25));
@@ -85,19 +73,21 @@ export async function markCampaignSent(id: string) {
       opens_count: opens,
       clicks_count: clicks,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("restaurant_id", restaurantId);
   if (error) throw error;
   revalidatePath("/marketing");
   revalidatePath("/marketing/campagnes");
 }
 
 export async function deleteCampaign(id: string) {
-  await getCtx();
+  const { restaurantId } = await requireActionPermission("m10_marketing", "delete");
   const supabase = await untyped();
   const { error } = await supabase
     .from("marketing_campaigns")
     .delete()
-    .eq("id", id);
+    .eq("id", id)
+    .eq("restaurant_id", restaurantId);
   if (error) throw error;
   revalidatePath("/marketing");
   revalidatePath("/marketing/campagnes");
@@ -108,7 +98,7 @@ export async function deleteCampaign(id: string) {
 export async function createPromotion(
   input: Omit<MarketingPromotionInsert, "restaurant_id">,
 ) {
-  const { restaurantId } = await getCtx();
+  const { restaurantId } = await requireActionPermission("m10_marketing", "write");
   const supabase = await untyped();
   const { error } = await supabase.from("marketing_promotions").insert({
     ...input,
@@ -121,24 +111,26 @@ export async function createPromotion(
 }
 
 export async function togglePromotion(id: string, isActive: boolean) {
-  await getCtx();
+  const { restaurantId } = await requireActionPermission("m10_marketing", "write");
   const supabase = await untyped();
   const { error } = await supabase
     .from("marketing_promotions")
     .update({ is_active: isActive })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("restaurant_id", restaurantId);
   if (error) throw error;
   revalidatePath("/marketing");
   revalidatePath("/marketing/promotions");
 }
 
 export async function deletePromotion(id: string) {
-  await getCtx();
+  const { restaurantId } = await requireActionPermission("m10_marketing", "delete");
   const supabase = await untyped();
   const { error } = await supabase
     .from("marketing_promotions")
     .delete()
-    .eq("id", id);
+    .eq("id", id)
+    .eq("restaurant_id", restaurantId);
   if (error) throw error;
   revalidatePath("/marketing");
   revalidatePath("/marketing/promotions");
@@ -149,12 +141,13 @@ export async function deletePromotion(id: string) {
 export async function createSocialPost(
   input: Omit<MarketingSocialPostInsert, "restaurant_id">,
 ) {
-  const { userId, restaurantId } = await getCtx();
+  const { restaurantId } = await requireActionPermission("m10_marketing", "write");
   const supabase = await untyped();
+  const { data: { user } } = await supabase.auth.getUser();
   const { error } = await supabase.from("marketing_social_posts").insert({
     ...input,
     restaurant_id: restaurantId,
-    created_by: userId,
+    created_by: user!.id,
   });
   if (error) throw error;
   revalidatePath("/marketing");
@@ -165,24 +158,26 @@ export async function updateSocialPost(
   id: string,
   patch: Partial<Omit<MarketingSocialPostInsert, "restaurant_id">>,
 ) {
-  await getCtx();
+  const { restaurantId } = await requireActionPermission("m10_marketing", "write");
   const supabase = await untyped();
   const { error } = await supabase
     .from("marketing_social_posts")
     .update(patch)
-    .eq("id", id);
+    .eq("id", id)
+    .eq("restaurant_id", restaurantId);
   if (error) throw error;
   revalidatePath("/marketing");
   revalidatePath("/marketing/reseaux");
 }
 
 export async function deleteSocialPost(id: string) {
-  await getCtx();
+  const { restaurantId } = await requireActionPermission("m10_marketing", "delete");
   const supabase = await untyped();
   const { error } = await supabase
     .from("marketing_social_posts")
     .delete()
-    .eq("id", id);
+    .eq("id", id)
+    .eq("restaurant_id", restaurantId);
   if (error) throw error;
   revalidatePath("/marketing");
   revalidatePath("/marketing/reseaux");

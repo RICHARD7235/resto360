@@ -16,7 +16,7 @@ export function getCreneauActif(now: Date, s: QhsSettings): QhsServiceCreneau | 
   const avantMidiDebut = new Date(midiDebut.getTime() - 60 * 60_000);
   if (now >= avantMidiDebut && now < midiDebut) return "avant_midi";
 
-  if (now >= midiDebut && now < midiFin) return "avant_midi";
+  if (now >= midiDebut && now < midiFin) return "midi";
 
   const apresMidiFin = new Date(midiFin.getTime() + 60 * 60_000);
   if (now >= midiFin && now < apresMidiFin) return "apres_midi";
@@ -24,7 +24,7 @@ export function getCreneauActif(now: Date, s: QhsSettings): QhsServiceCreneau | 
   const avantSoirDebut = new Date(soirDebut.getTime() - 60 * 60_000);
   if (now >= avantSoirDebut && now < soirDebut) return "avant_soir";
 
-  if (now >= soirDebut && now < soirFin) return "avant_soir";
+  if (now >= soirDebut && now < soirFin) return "soir";
 
   const apresSoirFin = new Date(soirFin.getTime() + 60 * 60_000);
   if (now >= soirFin && now < apresSoirFin) return "apres_soir";

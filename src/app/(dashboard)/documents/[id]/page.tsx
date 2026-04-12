@@ -21,6 +21,7 @@ import {
   urgencyColor,
   urgencyLabel,
 } from "@/lib/documents/format";
+import { requirePermission } from "@/lib/rbac";
 import { VersionTimeline } from "../_components/version-timeline";
 import { AddVersionDialog } from "../_components/add-version-dialog";
 
@@ -30,13 +31,14 @@ interface PageProps {
 
 export default async function DocumentDetailPage({ params }: PageProps) {
   const { id } = await params;
+  const { restaurantId } = await requirePermission("m12_documents", "read");
 
-  const doc = await getDocumentById(id);
+  const doc = await getDocumentById(id, restaurantId);
   if (!doc) notFound();
 
   const [versions, notifications, categories] = await Promise.all([
-    getVersions(id),
-    getNotifications(id),
+    getVersions(id, restaurantId),
+    getNotifications(id, restaurantId),
     getCategories(),
   ]);
 

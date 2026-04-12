@@ -7,7 +7,7 @@ import {
   upsertTemplate,
   importFromLibrary,
 } from "@/lib/supabase/qhs/mutations";
-import { getUserRestaurantId } from "@/lib/qhs/auth";
+import { requireActionPermission } from "@/lib/rbac";
 import type { QhsTaskTemplate } from "@/lib/supabase/qhs/types";
 
 // ---------------------------------------------------------------------------
@@ -15,6 +15,8 @@ import type { QhsTaskTemplate } from "@/lib/supabase/qhs/types";
 // ---------------------------------------------------------------------------
 
 export async function validateTaskAction(formData: FormData) {
+  await requireActionPermission("m13_qualite", "write");
+
   const instanceId = String(formData.get("instanceId"));
   const pin = String(formData.get("pin"));
   const commentaire = formData.get("commentaire")
@@ -53,7 +55,7 @@ export async function importFromLibraryAction(
   libraryIds: string[],
   zoneAssignments: Record<string, string>,
 ) {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m13_qualite", "write");
   const result = await importFromLibrary(
     restaurantId,
     libraryIds,

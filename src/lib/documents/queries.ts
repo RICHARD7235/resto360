@@ -41,22 +41,34 @@ export async function getDocumentsWithStatus(
 }
 
 export async function getDocumentById(
-  id: string
+  id: string,
+  restaurantId: string
 ): Promise<DocumentWithStatus | null> {
   const supabase = await untyped();
   const { data, error } = await supabase
     .from("documents_with_status")
     .select("*")
     .eq("id", id)
+    .eq("restaurant_id", restaurantId)
     .single();
   if (error) return null;
   return data as DocumentWithStatus;
 }
 
 export async function getVersions(
-  documentId: string
+  documentId: string,
+  restaurantId: string
 ): Promise<DocumentVersion[]> {
   const supabase = await untyped();
+  // Join through document to ensure tenant isolation
+  const { data: doc } = await supabase
+    .from("documents")
+    .select("id")
+    .eq("id", documentId)
+    .eq("restaurant_id", restaurantId)
+    .single();
+  if (!doc) return [];
+
   const { data, error } = await supabase
     .from("document_versions")
     .select("*")
@@ -80,9 +92,19 @@ export async function getRegisters(
 }
 
 export async function getNotifications(
-  documentId: string
+  documentId: string,
+  restaurantId: string
 ): Promise<DocumentNotification[]> {
   const supabase = await untyped();
+  // Verify document belongs to restaurant before returning notifications
+  const { data: doc } = await supabase
+    .from("documents")
+    .select("id")
+    .eq("id", documentId)
+    .eq("restaurant_id", restaurantId)
+    .single();
+  if (!doc) return [];
+
   const { data, error } = await supabase
     .from("document_notifications")
     .select("*")

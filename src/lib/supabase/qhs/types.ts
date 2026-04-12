@@ -6,7 +6,8 @@ export type QhsFrequency =
   | "quotidien" | "hebdo" | "mensuel" | "trimestriel" | "annuel";
 
 export type QhsServiceCreneau =
-  | "avant_midi" | "apres_midi" | "avant_soir" | "apres_soir"
+  | "avant_midi" | "midi" | "apres_midi"
+  | "avant_soir" | "soir" | "apres_soir"
   | "fin_journee" | "libre";
 
 export type QhsInstanceStatut =

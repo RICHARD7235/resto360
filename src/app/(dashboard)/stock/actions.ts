@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { requireActionPermission } from "@/lib/rbac";
 import type { Tables, Database } from "@/types/database.types";
 
 // ---------------------------------------------------------------------------
@@ -93,25 +93,6 @@ export interface InventoryLine {
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function getUserRestaurantId(): Promise<string> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/connexion");
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("restaurant_id")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile?.restaurant_id) {
-    throw new Error("Aucun restaurant associé à votre compte.");
-  }
-  return profile.restaurant_id;
-}
-
 function computeStockStatus(item: StockItemRow): StockStatus {
   if (Number(item.current_quantity) <= 0) return "critical";
   if (Number(item.current_quantity) <= Number(item.alert_threshold)) return "low";
@@ -125,7 +106,7 @@ function computeStockStatus(item: StockItemRow): StockStatus {
 export async function getStockItems(
   filters: StockItemFilters = {}
 ): Promise<StockItemWithStatus[]> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m05_stock", "read");
   const supabase = await createClient();
 
   let query = supabase
@@ -164,7 +145,7 @@ export async function getStockItems(
 export async function getStockItem(
   id: string
 ): Promise<{ item: StockItemWithStatus; movements: StockMovementRow[] }> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m05_stock", "read");
   const supabase = await createClient();
 
   const { data: item, error } = await supabase
@@ -190,7 +171,7 @@ export async function getStockItem(
 }
 
 export async function getStockStats(): Promise<StockStats> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m05_stock", "read");
   const supabase = await createClient();
 
   const { data } = await supabase
@@ -213,7 +194,7 @@ export async function getStockStats(): Promise<StockStats> {
 }
 
 export async function getStockAlerts(): Promise<StockItemWithStatus[]> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m05_stock", "read");
   const supabase = await createClient();
 
   const { data } = await supabase
@@ -235,7 +216,7 @@ export async function getStockAlerts(): Promise<StockItemWithStatus[]> {
 export async function createStockItem(
   data: Omit<StockItemInsert, "id" | "restaurant_id" | "created_at" | "updated_at">
 ): Promise<StockItemRow> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m05_stock", "write");
   const supabase = await createClient();
 
   const { data: item, error } = await supabase
@@ -252,7 +233,7 @@ export async function updateStockItem(
   id: string,
   data: Omit<StockItemUpdate, "id" | "restaurant_id" | "created_at">
 ): Promise<StockItemRow> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m05_stock", "write");
   const supabase = await createClient();
 
   const { data: item, error } = await supabase
@@ -274,7 +255,7 @@ export async function updateStockItem(
 export async function getStockMovements(
   filters: MovementFilters = {}
 ): Promise<(StockMovementRow & { stock_item_name: string })[]> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m05_stock", "read");
   const supabase = await createClient();
 
   // Get stock item ids for this restaurant
@@ -323,7 +304,7 @@ export async function createManualMovement(data: {
   quantity: number;
   notes?: string;
 }): Promise<StockMovementRow> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m05_stock", "write");
   const supabase = await createClient();
 
   // Verify item belongs to restaurant
@@ -366,7 +347,7 @@ export async function createManualMovement(data: {
 export async function processInventory(
   lines: InventoryLine[]
 ): Promise<{ updated: number; created: number }> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m05_stock", "write");
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const batchId = crypto.randomUUID();
@@ -439,7 +420,7 @@ export async function processInventory(
 export async function getPurchaseOrders(
   filters: PurchaseOrderFilters = {}
 ): Promise<PurchaseOrderWithSupplier[]> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m05_stock", "read");
   const supabase = await createClient();
 
   let query = supabase
@@ -458,12 +439,13 @@ export async function getPurchaseOrders(
   const { data: orders, error } = await query;
   if (error) throw new Error("Impossible de charger les bons de commande.");
 
-  // Get supplier names
+  // Get supplier names (filtered by restaurant for tenant safety)
   const supplierIds = [...new Set((orders || []).map((o) => o.supplier_id))];
   const { data: suppliers } = await supabase
     .from("suppliers")
     .select("id, name")
-    .in("id", supplierIds);
+    .in("id", supplierIds)
+    .eq("restaurant_id", restaurantId);
 
   const supplierMap = new Map((suppliers || []).map((s) => [s.id, s.name]));
 
@@ -476,7 +458,7 @@ export async function getPurchaseOrders(
 export async function getPurchaseOrder(
   id: string
 ): Promise<PurchaseOrderDetail> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m05_stock", "read");
   const supabase = await createClient();
 
   const { data: order, error } = await supabase
@@ -527,7 +509,7 @@ export async function createPurchaseOrder(
   notes?: string,
   expectedDeliveryDate?: string
 ): Promise<PurchaseOrderRow> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m05_stock", "write");
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -566,7 +548,7 @@ export async function createPurchaseOrder(
 }
 
 export async function sendPurchaseOrder(id: string): Promise<PurchaseOrderRow> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m05_stock", "write");
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -583,7 +565,7 @@ export async function sendPurchaseOrder(id: string): Promise<PurchaseOrderRow> {
 }
 
 export async function cancelPurchaseOrder(id: string): Promise<PurchaseOrderRow> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m05_stock", "write");
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -602,9 +584,19 @@ export async function receivePurchaseOrder(
   id: string,
   receivedItems: { item_id: string; quantity_received: number }[]
 ): Promise<PurchaseOrderRow> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m05_stock", "write");
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
+
+  // Verify the purchase order belongs to this restaurant before processing items
+  const { data: poCheck } = await supabase
+    .from("purchase_orders")
+    .select("id")
+    .eq("id", id)
+    .eq("restaurant_id", restaurantId)
+    .single();
+
+  if (!poCheck) throw new Error("Bon de commande introuvable.");
 
   // Update each PO item and create stock movements
   for (const received of receivedItems) {
@@ -612,6 +604,7 @@ export async function receivePurchaseOrder(
       .from("purchase_order_items")
       .select("*, purchase_order_id")
       .eq("id", received.item_id)
+      .eq("purchase_order_id", id)
       .single();
 
     if (!poItem) continue;
@@ -681,7 +674,7 @@ export async function receivePurchaseOrder(
 export async function getSuggestedPurchaseItems(
   supplierId: string
 ): Promise<SuggestedItem[]> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m05_stock", "read");
   const supabase = await createClient();
 
   // Get low stock items
@@ -734,7 +727,7 @@ export async function getSuggestedPurchaseItems(
 export async function matchStockItemsByName(
   names: string[]
 ): Promise<Record<string, { id: string; name: string; current_quantity: number; unit: string } | null>> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m05_stock", "read");
   const supabase = await createClient();
 
   const { data: stockItems } = await supabase
@@ -773,7 +766,7 @@ export async function matchStockItemsByName(
 export async function getStockItemsForTemplate(): Promise<
   { name: string; unit: string; current_quantity: number }[]
 > {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m05_stock", "read");
   const supabase = await createClient();
 
   const { data } = await supabase

@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { requireActionPermission } from "@/lib/rbac";
 import type { Tables, Database } from "@/types/database.types";
 
 // ---------------------------------------------------------------------------
@@ -37,39 +37,13 @@ export interface ReservationStats {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-async function getUserRestaurantId(): Promise<string> {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/connexion");
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("restaurant_id")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile?.restaurant_id) {
-    throw new Error("Aucun restaurant associé à votre compte.");
-  }
-
-  return profile.restaurant_id;
-}
-
-// ---------------------------------------------------------------------------
 // Queries
 // ---------------------------------------------------------------------------
 
 export async function getReservations(
   filters: ReservationFilters = {}
 ): Promise<ReservationRow[]> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m02_reservations", "read");
   const supabase = await createClient();
 
   let query = supabase
@@ -114,7 +88,7 @@ export async function getReservations(
 export async function getReservation(
   id: string
 ): Promise<ReservationRow | null> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m02_reservations", "read");
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -135,7 +109,7 @@ export async function getReservation(
 export async function getReservationStats(
   date: string
 ): Promise<ReservationStats> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m02_reservations", "read");
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -183,7 +157,7 @@ export async function getReservationStats(
 export async function createReservation(
   data: Omit<ReservationInsert, "restaurant_id" | "id" | "created_at" | "updated_at">
 ): Promise<ReservationRow> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m02_reservations", "write");
   const supabase = await createClient();
 
   const { data: reservation, error } = await supabase
@@ -203,7 +177,7 @@ export async function updateReservation(
   id: string,
   data: Omit<ReservationUpdate, "id" | "restaurant_id" | "created_at">
 ): Promise<ReservationRow> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m02_reservations", "write");
   const supabase = await createClient();
 
   const { data: reservation, error } = await supabase
@@ -229,7 +203,7 @@ export async function updateReservationStatus(
 }
 
 export async function deleteReservation(id: string): Promise<void> {
-  const restaurantId = await getUserRestaurantId();
+  const { restaurantId } = await requireActionPermission("m02_reservations", "delete");
   const supabase = await createClient();
 
   const { error } = await supabase
