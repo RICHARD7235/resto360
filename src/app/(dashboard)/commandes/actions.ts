@@ -377,7 +377,7 @@ export async function getActiveOrders(): Promise<OrderWithItems[]> {
     .select("*")
     .eq("restaurant_id", restaurantId)
     .gte("created_at", today)
-    .in("status", ["sent", "preparing", "ready"])
+    .in("status", ["sent", "preparing", "ready", "served"])
     .order("created_at", { ascending: true });
 
   if (error) {
@@ -616,7 +616,7 @@ export async function getPreparationTickets(
     .select("id, table_number, notes, order_type, customer_name, delivery_address")
     .eq("restaurant_id", restaurantId)
     .gte("created_at", today)
-    .in("status", ["sent", "preparing", "ready"]);
+    .in("status", ["sent", "preparing", "ready", "served"]);
 
   const orders = (rawOrders ?? []) as {
     id: string;
