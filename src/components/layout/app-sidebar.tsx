@@ -31,6 +31,8 @@ import {
   SidebarHeader,
   SidebarFooter,
 } from "@/components/ui/sidebar";
+import { ROUTE_TO_MODULE } from "@/lib/rbac-constants";
+import type { ModulePermissions } from "@/lib/rbac";
 
 const modules = [
   {
@@ -69,8 +71,22 @@ const modules = [
   },
 ];
 
-export function AppSidebar() {
+interface AppSidebarProps {
+  permissions: Record<string, ModulePermissions>;
+}
+
+export function AppSidebar({ permissions }: AppSidebarProps) {
   const pathname = usePathname();
+
+  const filteredModules = modules.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => {
+      const module = ROUTE_TO_MODULE[item.href];
+      if (!module) return true; // Non-module routes always visible
+      const perm = permissions[module];
+      return perm?.can_read ?? false;
+    }),
+  })).filter((group) => group.items.length > 0);
 
   return (
     <Sidebar collapsible="icon">
@@ -91,7 +107,7 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
-        {modules.map((group) => (
+        {filteredModules.map((group) => (
           <SidebarGroup key={group.group}>
             <SidebarGroupLabel>{group.group}</SidebarGroupLabel>
             <SidebarGroupContent>
