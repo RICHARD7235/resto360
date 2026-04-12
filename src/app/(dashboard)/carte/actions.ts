@@ -434,18 +434,6 @@ export async function updateRecipe(
       );
     }
   }
-
-  /* --- FALLBACK: ancien code non atomique (si la migration n'est pas encore appliquée) ---
-  if (ingredients !== undefined) {
-    await supabase.from("recipe_ingredients").delete().eq("recipe_id", id);
-    if (ingredients.length > 0) {
-      const { error: ingError } = await supabase
-        .from("recipe_ingredients")
-        .insert(ingredients.map((ing, i) => ({ ...ing, recipe_id: id, sort_order: i })));
-      if (ingError) throw ingError;
-    }
-  }
-  --- FIN FALLBACK --- */
 }
 
 export async function deleteRecipe(id: string): Promise<void> {

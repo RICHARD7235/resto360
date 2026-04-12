@@ -386,31 +386,6 @@ export async function createManualMovement(data: {
   }
 
   return movement;
-
-  /* --- FALLBACK: ancien code non atomique (si la migration n'est pas encore appliquée) ---
-  const { data: item } = await supabase
-    .from("stock_items")
-    .select("id, current_quantity")
-    .eq("id", data.stock_item_id)
-    .eq("restaurant_id", restaurantId)
-    .single();
-  if (!item) throw new Error("Article introuvable.");
-
-  const { data: movementFb, error: movError } = await supabase
-    .from("stock_movements")
-    .insert({
-      stock_item_id: data.stock_item_id, type: data.type, quantity: data.quantity,
-      reference_type: "manual", notes: data.notes || null, created_by: user!.id,
-    })
-    .select().single();
-  if (movError) throw new Error("Impossible de créer le mouvement.");
-
-  const newQty = Number(item.current_quantity) + data.quantity;
-  await supabase.from("stock_items")
-    .update({ current_quantity: newQty, updated_at: new Date().toISOString() })
-    .eq("id", data.stock_item_id);
-  return movementFb;
-  --- FIN FALLBACK --- */
 }
 
 export async function processInventory(
