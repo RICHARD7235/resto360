@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Plus, ChefHat, Monitor } from "lucide-react";
+import { Plus, ChefHat, Monitor, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useCommandesStore } from "@/stores/commandes.store";
-import { FloorPlan } from "@/components/modules/commandes/floor-plan";
+import { FloorPlanCanvas, type CanvasTable } from "@/components/modules/commandes/floor-plan-canvas";
+import { TakeawayOrdersBar, type TakeawayOrder } from "@/components/modules/commandes/takeaway-orders-bar";
 import { OrderSummary } from "@/components/modules/commandes/order-summary";
 import {
   getActiveOrders,
@@ -14,6 +15,8 @@ import {
   updateOrderStatus,
   getPreparationTickets,
   getTodayReservationsForFloorPlan,
+  getRestaurantTables,
+  type RestaurantTable,
 } from "./actions";
 import { getActiveStations } from "../admin-operationnelle/actions";
 import type { OrderWithItems, OrderStats, PreparationTicketWithItems, FloorPlanReservation } from "./actions";
@@ -22,13 +25,10 @@ import type { Tables } from "@/types/database.types";
 type Station = Tables<"preparation_stations">;
 
 // ---------------------------------------------------------------------------
-// Tables de La Cabane Qui Fume (configuration statique pour le MVP)
+// Table status type alias (for canvas mapping)
 // ---------------------------------------------------------------------------
 
-const RESTAURANT_TABLES = [
-  "T1", "T2", "T3", "T4", "T5", "T6",
-  "T7", "T8", "T9", "T10", "T11", "T12",
-];
+type TableStatus = "free" | "occupied" | "waiting" | "ready" | "reserved";
 
 function getTableStatus(
   orders: OrderWithItems[],
@@ -168,6 +168,7 @@ export default function CommandesPage() {
   const [prepTickets, setPrepTickets] = useState<PreparationTicketWithItems[]>([]);
   const [stations, setStations] = useState<Station[]>([]);
   const [reservations, setReservations] = useState<FloorPlanReservation[]>([]);
+  const [restaurantTables, setRestaurantTables] = useState<RestaurantTable[]>([]);
 
   useEffect(() => {
     if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
@@ -178,18 +179,20 @@ export default function CommandesPage() {
   const fetchData = useCallback(async () => {
     try {
       const today = new Date().toISOString().slice(0, 10);
-      const [ordersData, statsData, ticketsData, stationsData, reservationsData] = await Promise.all([
+      const [ordersData, statsData, ticketsData, stationsData, reservationsData, tablesData] = await Promise.all([
         getActiveOrders(),
         getOrderStats(today),
         getPreparationTickets(),
         getActiveStations(),
         getTodayReservationsForFloorPlan(),
+        getRestaurantTables(),
       ]);
       setOrders(ordersData);
       setStats(statsData);
       setPrepTickets(ticketsData);
       setStations(stationsData);
       setReservations(reservationsData);
+      setRestaurantTables(tablesData);
     } catch (error) {
       console.error("Erreur chargement commandes:", error);
     } finally {
@@ -206,10 +209,35 @@ export default function CommandesPage() {
 
   useTicketReadyNotifications(prepTickets);
 
-  const tables = RESTAURANT_TABLES.map((t) => ({
-    tableNumber: t,
-    ...getTableStatus(orders, t, prepTickets, reservations),
-  }));
+  // Map DB tables to CanvasTable[] with live status
+  const canvasTables: CanvasTable[] = restaurantTables.map((rt) => {
+    const statusInfo = getTableStatus(orders, rt.name, prepTickets, reservations);
+    return {
+      id: rt.id,
+      name: rt.name,
+      zone: rt.zone,
+      capacity: rt.capacity,
+      shape: rt.shape,
+      width: rt.width,
+      height: rt.height,
+      pos_x: rt.pos_x,
+      pos_y: rt.pos_y,
+      status: statusInfo.status as TableStatus,
+      orderTotal: "orderTotal" in statusInfo ? statusInfo.orderTotal : undefined,
+      stationBadges: "stationBadges" in statusInfo ? statusInfo.stationBadges : undefined,
+    };
+  });
+
+  // Takeaway orders = orders without a table_number
+  const takeawayOrders: TakeawayOrder[] = orders
+    .filter((o) => !o.table_number)
+    .map((o) => ({
+      id: o.id,
+      customer_name: o.notes ?? null,
+      order_type: "takeaway",
+      status: o.status ?? "sent",
+      total: o.total ?? 0,
+    }));
 
   const selectedOrder = selectedTable
     ? orders.find(
@@ -250,6 +278,14 @@ export default function CommandesPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            className="min-h-11 gap-2"
+            render={<Link href="/commandes/plan-de-salle" />}
+          >
+            <Settings2 className="h-4 w-4" />
+            Editeur plan
+          </Button>
           {stations.map((station) => (
             <Button
               key={station.id}
@@ -294,11 +330,18 @@ export default function CommandesPage() {
       {/* Main content */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Plan de salle */}
-        <div className="lg:col-span-2">
-          <FloorPlan
-            tables={tables}
+        <div className="lg:col-span-2 space-y-4">
+          <FloorPlanCanvas
+            tables={canvasTables}
             selectedTable={selectedTable}
             onSelectTable={setSelectedTable}
+          />
+          <TakeawayOrdersBar
+            orders={takeawayOrders}
+            onSelectOrder={(orderId) => {
+              const order = orders.find((o) => o.id === orderId);
+              if (order?.table_number) setSelectedTable(order.table_number);
+            }}
           />
         </div>
 

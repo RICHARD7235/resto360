@@ -3,10 +3,21 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import type { Tables, Database } from "@/types/database.types";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   createPreparationTickets,
   addItemsToPreparationTickets,
 } from "@/lib/preparation-tickets";
+
+// ---------------------------------------------------------------------------
+// Untyped Supabase client (restaurant_tables not yet in generated types)
+// ---------------------------------------------------------------------------
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type UntypedClient = SupabaseClient<any, any, any>;
+
+async function createUntypedClient(): Promise<UntypedClient> {
+  return (await createClient()) as unknown as UntypedClient;
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -855,5 +866,90 @@ export async function deleteOrder(id: string): Promise<void> {
     throw new Error(
       `Erreur lors de la suppression de la commande : ${error.message}`
     );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Restaurant Tables (plan de salle dynamique)
+// ---------------------------------------------------------------------------
+
+export interface RestaurantTable {
+  id: string;
+  restaurant_id: string;
+  name: string;
+  zone: string;
+  capacity: number;
+  shape: "square" | "round" | "rectangle";
+  width: number;
+  height: number;
+  pos_x: number;
+  pos_y: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getRestaurantTables(): Promise<RestaurantTable[]> {
+  const restaurantId = await getUserRestaurantId();
+  const supabase = await createUntypedClient();
+
+  const { data, error } = await supabase
+    .from("restaurant_tables")
+    .select("*")
+    .eq("restaurant_id", restaurantId)
+    .eq("is_active", true)
+    .order("name", { ascending: true });
+
+  if (error) {
+    throw new Error(`Erreur chargement tables restaurant: ${error.message}`);
+  }
+
+  return (data ?? []) as RestaurantTable[];
+}
+
+export async function upsertRestaurantTables(
+  tables: Omit<RestaurantTable, "restaurant_id" | "created_at" | "updated_at" | "is_active">[]
+): Promise<void> {
+  const restaurantId = await getUserRestaurantId();
+  const supabase = await createUntypedClient();
+
+  const now = new Date().toISOString();
+
+  const rows = tables.map((t) => ({
+    id: t.id,
+    restaurant_id: restaurantId,
+    name: t.name,
+    zone: t.zone,
+    capacity: t.capacity,
+    shape: t.shape,
+    width: t.width,
+    height: t.height,
+    pos_x: t.pos_x,
+    pos_y: t.pos_y,
+    is_active: true,
+    updated_at: now,
+  }));
+
+  const { error } = await supabase
+    .from("restaurant_tables")
+    .upsert(rows, { onConflict: "id" });
+
+  if (error) {
+    throw new Error(`Erreur sauvegarde tables: ${error.message}`);
+  }
+}
+
+export async function deleteRestaurantTable(tableId: string): Promise<void> {
+  const restaurantId = await getUserRestaurantId();
+  const supabase = await createUntypedClient();
+
+  const { error } = await supabase
+    .from("restaurant_tables")
+    .update({ is_active: false, updated_at: new Date().toISOString() })
+    .eq("id", tableId)
+    .eq("restaurant_id", restaurantId);
+
+  if (error) {
+    throw new Error(`Erreur suppression table: ${error.message}`);
   }
 }
