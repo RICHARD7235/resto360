@@ -11,6 +11,24 @@ import {
   deleteDocumentFiles,
   getSignedUrl,
 } from "@/lib/documents/storage";
+import { z } from "zod";
+
+// ---------------------------------------------------------------------------
+// Zod schemas
+// ---------------------------------------------------------------------------
+
+const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+
+const createDocumentSchema = z.object({
+  title: z.string().min(1).max(200),
+  category_id: z.string().uuid(),
+  expires_at: z.string().regex(dateRegex).optional(),
+  issued_at: z.string().regex(dateRegex).optional(),
+});
+
+const addVersionSchema = z.object({
+  change_notes: z.string().max(1000).optional(),
+});
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type UntypedClient = SupabaseClient<any, any, any>;
@@ -61,6 +79,13 @@ export async function createDocument(
       String(formData.get("reference_number") ?? "").trim() || null;
     const issuer = String(formData.get("issuer") ?? "").trim() || null;
     const file = formData.get("file");
+
+    createDocumentSchema.parse({
+      title,
+      category_id: category_id ?? "",
+      ...(expires_at ? { expires_at } : {}),
+      ...(issued_at ? { issued_at } : {}),
+    });
 
     if (!title) return { ok: false, error: "Titre requis." };
     if (!category_id) return { ok: false, error: "Catégorie requise." };
@@ -147,6 +172,10 @@ export async function addVersion(
     const file = formData.get("file");
     const change_notes =
       String(formData.get("change_notes") ?? "").trim() || null;
+
+    addVersionSchema.parse({
+      ...(change_notes ? { change_notes } : {}),
+    });
 
     if (!(file instanceof File) || file.size === 0) {
       return { ok: false, error: "Fichier requis." };

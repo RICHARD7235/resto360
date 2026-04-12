@@ -1,8 +1,32 @@
 "use server";
 
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireActionPermission } from "@/lib/rbac";
 import type { Tables, Database } from "@/types/database.types";
+
+// ---------------------------------------------------------------------------
+// Zod Schemas
+// ---------------------------------------------------------------------------
+
+const supplierSchema = z.object({
+  name: z.string().min(1).max(200),
+  email: z.string().email().optional().nullable().or(z.literal("")),
+  phone: z.string().max(20).optional().nullable(),
+  address: z.string().max(500).optional().nullable(),
+  notes: z.string().max(1000).optional().nullable(),
+  contact_name: z.string().max(200).optional().nullable(),
+  is_active: z.boolean().optional(),
+});
+
+const catalogItemSchema = z.object({
+  label: z.string().min(1).max(200),
+  unit: z.string().min(1),
+  unit_price: z.number().min(0),
+  category: z.string().max(100).optional().nullable(),
+  reference: z.string().max(100).optional().nullable(),
+  is_available: z.boolean().optional(),
+});
 
 // ---------------------------------------------------------------------------
 // Types
@@ -151,6 +175,8 @@ export async function createSupplier(
   const { restaurantId } = await requireActionPermission("m06_fournisseurs", "write");
   const supabase = await createClient();
 
+  supplierSchema.parse(data);
+
   const { data: supplier, error } = await supabase
     .from("suppliers")
     .insert({ ...data, restaurant_id: restaurantId })
@@ -167,6 +193,8 @@ export async function updateSupplier(
 ): Promise<SupplierRow> {
   const { restaurantId } = await requireActionPermission("m06_fournisseurs", "write");
   const supabase = await createClient();
+
+  supplierSchema.partial().parse(data);
 
   const { data: supplier, error } = await supabase
     .from("suppliers")
@@ -222,6 +250,8 @@ export async function createCatalogItem(
 
   if (!supplier) throw new Error("Fournisseur introuvable.");
 
+  catalogItemSchema.parse(data);
+
   const { data: item, error } = await supabase
     .from("supplier_catalog_items")
     .insert({ ...data, supplier_id: supplierId })
@@ -256,6 +286,8 @@ export async function updateCatalogItem(
     .single();
 
   if (!supplier) throw new Error("Fournisseur introuvable.");
+
+  catalogItemSchema.partial().parse(data);
 
   const { data: item, error } = await supabase
     .from("supplier_catalog_items")

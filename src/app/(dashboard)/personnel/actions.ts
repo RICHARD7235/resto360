@@ -1,5 +1,6 @@
 "use server";
 
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { requireActionPermission } from "@/lib/rbac";
@@ -36,6 +37,51 @@ type UntypedClient = SupabaseClient<any, any, any>;
 async function createUntypedClient(): Promise<UntypedClient> {
   return (await createClient()) as unknown as UntypedClient;
 }
+
+// ---------------------------------------------------------------------------
+// Zod Schemas
+// ---------------------------------------------------------------------------
+
+const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const staffMemberSchema = z.object({
+  full_name: z.string().min(1).max(200),
+  email: z.string().email().or(z.literal("")).optional().nullable(),
+  phone: z.string().max(20).optional().nullable(),
+  role: z.enum(["serveur", "cuisinier", "plongeur", "barman", "manager", "commis", "extra"]).optional().nullable(),
+  hourly_rate: z.number().min(0).optional().nullable(),
+  contract_type: z.enum(["cdi", "cdd", "extra", "apprenti", "stage"]).optional().nullable(),
+  start_date: z.string().regex(dateRegex).optional().nullable(),
+  social_security_number: z.string().max(20).optional().nullable(),
+});
+
+const shiftSchema = z.object({
+  staff_member_id: z.string().regex(uuidRegex),
+  date: z.string().regex(dateRegex),
+  start_time: z.string().min(1),
+  end_time: z.string().min(1),
+  period: z.string().optional().nullable(),
+  break_minutes: z.number().min(0).optional().nullable(),
+  shift_type: z.string().optional().nullable(),
+  notes: z.string().max(500).optional().nullable(),
+});
+
+const leaveRequestSchema = z.object({
+  staff_member_id: z.string().regex(uuidRegex),
+  start_date: z.string().regex(dateRegex),
+  end_date: z.string().regex(dateRegex),
+  leave_type: z.enum(["conge_paye", "rtt", "maladie", "sans_solde", "autre"]),
+  reason: z.string().max(500).optional().nullable(),
+});
+
+const payrollAdvanceSchema = z.object({
+  staff_member_id: z.string().regex(uuidRegex),
+  amount: z.number().min(0.01),
+  date: z.string().regex(dateRegex),
+  payment_method: z.string().optional().nullable(),
+  notes: z.string().max(500).optional().nullable(),
+});
 
 // ---------------------------------------------------------------------------
 // Types
@@ -266,6 +312,7 @@ export async function getStaffMember(
 export async function createStaffMember(
   data: StaffFormData
 ): Promise<StaffMember> {
+  staffMemberSchema.parse(data);
   const { restaurantId } = await requireActionPermission("m07_personnel", "write");
   const supabase = await createUntypedClient();
 
@@ -620,6 +667,7 @@ export async function createShift(
   scheduleWeekId: string,
   data: ShiftFormData
 ): Promise<Shift> {
+  shiftSchema.parse(data);
   const { restaurantId } = await requireActionPermission("m07_personnel", "write");
   const supabase = await createUntypedClient();
 
@@ -972,6 +1020,7 @@ export async function getLeaveRequests(
 export async function createLeaveRequest(
   data: LeaveRequestFormData
 ): Promise<LeaveRequest> {
+  leaveRequestSchema.parse(data);
   const { restaurantId } = await requireActionPermission("m07_personnel", "write");
   const supabase = await createUntypedClient();
 
@@ -1255,6 +1304,7 @@ export async function getPayrollAdvances(
 export async function createPayrollAdvance(
   data: PayrollAdvanceFormData
 ): Promise<PayrollAdvance> {
+  payrollAdvanceSchema.parse(data);
   const { restaurantId } = await requireActionPermission("m07_personnel", "write");
   const supabase = await createUntypedClient();
 

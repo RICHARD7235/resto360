@@ -1,8 +1,27 @@
 "use server";
 
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireActionPermission } from "@/lib/rbac";
 import type { Tables, Database } from "@/types/database.types";
+
+// ---------------------------------------------------------------------------
+// Zod Schemas
+// ---------------------------------------------------------------------------
+
+const reservationSchema = z.object({
+  customer_name: z.string().min(1).max(200),
+  customer_phone: z.string().max(20).optional().nullable(),
+  customer_email: z.string().email().optional().nullable().or(z.literal("")),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  time: z.string().regex(/^\d{2}:\d{2}$/),
+  end_time: z.string().regex(/^\d{2}:\d{2}$/).optional().nullable(),
+  party_size: z.number().int().min(1).max(100),
+  table_ids: z.array(z.string().uuid()).optional(),
+  notes: z.string().max(1000).optional().nullable(),
+  status: z.enum(["pending", "confirmed", "seated", "completed", "cancelled", "no_show"]).optional(),
+  type: z.enum(["restaurant", "salle", "seminaire"]).optional(),
+});
 
 // ---------------------------------------------------------------------------
 // Types
@@ -160,6 +179,8 @@ export async function createReservation(
   const { restaurantId } = await requireActionPermission("m02_reservations", "write");
   const supabase = await createClient();
 
+  reservationSchema.parse(data);
+
   const { data: reservation, error } = await supabase
     .from("reservations")
     .insert({ ...data, restaurant_id: restaurantId })
@@ -179,6 +200,8 @@ export async function updateReservation(
 ): Promise<ReservationRow> {
   const { restaurantId } = await requireActionPermission("m02_reservations", "write");
   const supabase = await createClient();
+
+  reservationSchema.partial().parse(data);
 
   const { data: reservation, error } = await supabase
     .from("reservations")

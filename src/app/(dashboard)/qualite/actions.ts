@@ -9,6 +9,21 @@ import {
 } from "@/lib/supabase/qhs/mutations";
 import { requireActionPermission } from "@/lib/rbac";
 import type { QhsTaskTemplate } from "@/lib/supabase/qhs/types";
+import { z } from "zod";
+
+// ---------------------------------------------------------------------------
+// Zod schemas
+// ---------------------------------------------------------------------------
+
+const validateTaskSchema = z.object({
+  instanceId: z.string().uuid(),
+  pin: z.string().min(4).max(10).regex(/^\d+$/, "PIN digits only"),
+  commentaire: z.string().max(1000).optional(),
+});
+
+const importFromLibrarySchema = z.object({
+  libraryIds: z.array(z.string().uuid()).min(1).max(50),
+});
 
 // ---------------------------------------------------------------------------
 // Server Actions
@@ -23,6 +38,12 @@ export async function validateTaskAction(formData: FormData) {
     ? String(formData.get("commentaire"))
     : undefined;
   const photoFile = formData.get("photo") as File | null;
+
+  validateTaskSchema.parse({
+    instanceId,
+    pin,
+    ...(commentaire !== undefined ? { commentaire } : {}),
+  });
 
   const result = await validateTask({
     instanceId,
@@ -56,6 +77,9 @@ export async function importFromLibraryAction(
   zoneAssignments: Record<string, string>,
 ) {
   const { restaurantId } = await requireActionPermission("m13_qualite", "write");
+
+  importFromLibrarySchema.parse({ libraryIds });
+
   const result = await importFromLibrary(
     restaurantId,
     libraryIds,

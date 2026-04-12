@@ -1,5 +1,6 @@
 "use server";
 
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
@@ -13,7 +14,36 @@ async function untyped(): Promise<UntypedClient> {
   return (await createClient()) as unknown as UntypedClient;
 }
 
+// ---------------------------------------------------------------------------
+// Zod Schemas
+// ---------------------------------------------------------------------------
+
+const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+
+const reviewSchema = z.object({
+  author_name: z.string().min(1).max(200),
+  rating: z.number().int().min(1).max(5),
+  source: z.enum(["google", "tripadvisor", "thefork", "internal", "other", "manual", "facebook"]),
+  review_date: z.string().regex(dateRegex),
+  comment: z.string().max(5000).optional().nullable(),
+});
+
+const responseSchema = z.object({
+  response: z.string().min(1).max(2000),
+});
+
+const reviewCsvRowSchema = z.object({
+  author_name: z.string().min(1).max(200),
+  rating: z.number().min(1).max(5),
+  source: z.string(),
+  review_date: z.string().regex(dateRegex),
+  comment: z.string().max(5000).optional(),
+});
+
+const reviewCsvArraySchema = z.array(reviewCsvRowSchema).max(500);
+
 export async function createReview(input: Omit<ReviewInsert, "restaurant_id">) {
+  reviewSchema.parse(input);
   const { restaurantId } = await requireActionPermission("m09_avis", "write");
   const supabase = await untyped();
   const { error } = await supabase.from("reviews").insert({
@@ -25,8 +55,8 @@ export async function createReview(input: Omit<ReviewInsert, "restaurant_id">) {
 }
 
 export async function respondToReview(reviewId: string, response: string) {
+  responseSchema.parse({ response });
   const { restaurantId } = await requireActionPermission("m09_avis", "write");
-  if (!response.trim()) throw new Error("Réponse vide");
   const supabase = await untyped();
   // Get current user for responded_by
   const { data: { user } } = await supabase.auth.getUser();
@@ -72,6 +102,7 @@ type CsvRow = {
 };
 
 export async function importReviewsCsv(rows: CsvRow[]) {
+  reviewCsvArraySchema.parse(rows);
   const { restaurantId } = await requireActionPermission("m09_avis", "write");
   const supabase = await untyped();
   const validSources: ReviewSource[] = ["manual", "google", "tripadvisor", "thefork", "facebook"];

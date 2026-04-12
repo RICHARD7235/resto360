@@ -1,8 +1,46 @@
 "use server";
 
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import type { Tables, Database } from "@/types/database.types";
 import { requireActionPermission } from "@/lib/rbac";
+
+// ---------------------------------------------------------------------------
+// Zod Schemas
+// ---------------------------------------------------------------------------
+
+const categorySchema = z.object({
+  name: z.string().min(1).max(100),
+  sort_order: z.number().int().min(0),
+  station: z.string().optional(),
+});
+
+const productSchema = z.object({
+  name: z.string().min(1).max(200),
+  description: z.string().max(1000).optional().nullable(),
+  price: z.number().min(0),
+  cost_price: z.number().min(0).optional().nullable(),
+  category_id: z.string().uuid(),
+  allergens: z.array(z.string()).optional().nullable(),
+  is_available: z.boolean().optional(),
+  sort_order: z.number().int().min(0).optional(),
+  image_url: z.string().url().optional().nullable().or(z.literal("")),
+});
+
+const recipeIngredientSchema = z.object({
+  ingredient_id: z.string().uuid(),
+  quantity: z.number().min(0),
+  unit: z.string().min(1),
+});
+
+const recipeSchema = z.object({
+  name: z.string().min(1).max(200),
+  description: z.string().max(2000).optional().nullable(),
+  portions: z.number().int().min(1).optional().nullable(),
+  preparation_time: z.number().int().min(0).optional().nullable(),
+  instructions: z.string().optional().nullable(),
+  product_id: z.string().uuid().optional().nullable(),
+});
 
 // ---------------------------------------------------------------------------
 // Types
@@ -75,6 +113,8 @@ export async function createCategory(
   const { restaurantId } = await requireActionPermission("m04_carte", "write");
   const supabase = await createClient();
 
+  categorySchema.parse({ name, sort_order: sortOrder });
+
   const { data, error } = await supabase
     .from("menu_categories")
     .insert({
@@ -94,6 +134,9 @@ export async function updateCategory(
 ): Promise<MenuCategoryRow> {
   const { restaurantId } = await requireActionPermission("m04_carte", "write");
   const supabase = await createClient();
+
+  categorySchema.partial().parse(updates);
+
   const { data, error } = await supabase
     .from("menu_categories")
     .update(updates)
@@ -169,6 +212,8 @@ export async function createProduct(
   const { restaurantId } = await requireActionPermission("m04_carte", "write");
   const supabase = await createClient();
 
+  productSchema.parse(product);
+
   const { data, error } = await supabase
     .from("products")
     .insert({ ...product, restaurant_id: restaurantId })
@@ -184,6 +229,9 @@ export async function updateProduct(
 ): Promise<ProductRow> {
   const { restaurantId } = await requireActionPermission("m04_carte", "write");
   const supabase = await createClient();
+
+  productSchema.partial().parse(updates);
+
   const { data, error } = await supabase
     .from("products")
     .update({ ...updates, updated_at: new Date().toISOString() })
@@ -303,6 +351,9 @@ export async function createRecipe(
   const { restaurantId } = await requireActionPermission("m04_carte", "write");
   const supabase = await createClient();
 
+  recipeSchema.parse(recipe);
+  z.array(recipeIngredientSchema).parse(ingredients);
+
   const { data: newRecipe, error } = await supabase
     .from("recipes")
     .insert({ ...recipe, restaurant_id: restaurantId })
@@ -337,6 +388,11 @@ export async function updateRecipe(
   const { restaurantId } = await requireActionPermission("m04_carte", "write");
   const supabase = await createClient();
 
+  recipeSchema.partial().parse(recipe);
+  if (ingredients !== undefined) {
+    z.array(recipeIngredientSchema).parse(ingredients);
+  }
+
   // Verify ownership before any mutation
   const { data: existing, error: fetchError } = await supabase
     .from("recipes")
@@ -354,21 +410,42 @@ export async function updateRecipe(
   if (error) throw error;
 
   if (ingredients !== undefined) {
-    // Safe: recipe ownership verified above, so recipe_id belongs to this tenant
+    // Atomic replace via RPC — prevents orphaned recipes if INSERT fails after DELETE
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: rpcError } = await (supabase.rpc as any)(
+      "replace_recipe_ingredients",
+      {
+        p_recipe_id: id,
+        p_restaurant_id: restaurantId,
+        p_ingredients: JSON.stringify(
+          ingredients.map((ing, i) => ({
+            ...ing,
+            sort_order: i,
+          }))
+        ),
+      }
+    );
+
+    if (rpcError) {
+      throw new Error(
+        rpcError.message?.includes("not found")
+          ? "Recette introuvable"
+          : `Erreur mise à jour des ingrédients : ${rpcError.message}`
+      );
+    }
+  }
+
+  /* --- FALLBACK: ancien code non atomique (si la migration n'est pas encore appliquée) ---
+  if (ingredients !== undefined) {
     await supabase.from("recipe_ingredients").delete().eq("recipe_id", id);
     if (ingredients.length > 0) {
       const { error: ingError } = await supabase
         .from("recipe_ingredients")
-        .insert(
-          ingredients.map((ing, i) => ({
-            ...ing,
-            recipe_id: id,
-            sort_order: i,
-          }))
-        );
+        .insert(ingredients.map((ing, i) => ({ ...ing, recipe_id: id, sort_order: i })));
       if (ingError) throw ingError;
     }
   }
+  --- FIN FALLBACK --- */
 }
 
 export async function deleteRecipe(id: string): Promise<void> {

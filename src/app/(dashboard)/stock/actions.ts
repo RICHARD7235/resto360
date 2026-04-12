@@ -1,8 +1,39 @@
 "use server";
 
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireActionPermission } from "@/lib/rbac";
 import type { Tables, Database } from "@/types/database.types";
+
+// ---------------------------------------------------------------------------
+// Zod Schemas
+// ---------------------------------------------------------------------------
+
+const stockItemSchema = z.object({
+  name: z.string().min(1).max(200),
+  unit: z.string().min(1),
+  category: z.string().max(100).optional().nullable(),
+  current_quantity: z.number().min(0),
+  alert_threshold: z.number().min(0).optional().nullable(),
+  optimal_quantity: z.number().min(0).optional().nullable(),
+  unit_cost: z.number().min(0).optional().nullable(),
+  tracking_mode: z.enum(["ingredient", "lot"]).optional(),
+  is_active: z.boolean().optional(),
+});
+
+const manualMovementSchema = z.object({
+  stock_item_id: z.string().uuid(),
+  type: z.enum(["purchase", "consumption", "adjustment", "waste", "return", "inventory"]),
+  quantity: z.number(),
+  notes: z.string().max(500).optional(),
+});
+
+const purchaseOrderItemSchema = z.object({
+  stock_item_id: z.string().uuid(),
+  quantity: z.number().min(0.01),
+  unit_price: z.number().min(0),
+  catalog_item_id: z.string().uuid().optional(),
+});
 
 // ---------------------------------------------------------------------------
 // Types
@@ -219,6 +250,8 @@ export async function createStockItem(
   const { restaurantId } = await requireActionPermission("m05_stock", "write");
   const supabase = await createClient();
 
+  stockItemSchema.parse(data);
+
   const { data: item, error } = await supabase
     .from("stock_items")
     .insert({ ...data, restaurant_id: restaurantId })
@@ -235,6 +268,8 @@ export async function updateStockItem(
 ): Promise<StockItemRow> {
   const { restaurantId } = await requireActionPermission("m05_stock", "write");
   const supabase = await createClient();
+
+  stockItemSchema.partial().parse(data);
 
   const { data: item, error } = await supabase
     .from("stock_items")
@@ -307,41 +342,75 @@ export async function createManualMovement(data: {
   const { restaurantId } = await requireActionPermission("m05_stock", "write");
   const supabase = await createClient();
 
-  // Verify item belongs to restaurant
+  manualMovementSchema.parse(data);
+
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // Atomic stock adjustment via RPC — eliminates read-then-write race condition
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: rpcError } = await (supabase.rpc as any)(
+    "adjust_stock_quantity",
+    {
+      p_stock_item_id: data.stock_item_id,
+      p_restaurant_id: restaurantId,
+      p_delta: data.quantity,
+      p_movement_type: data.type,
+      p_reference_type: "manual",
+      p_reference_id: null,
+      p_notes: data.notes || null,
+      p_user_id: user!.id,
+      p_unit_cost: null,
+    }
+  );
+
+  if (rpcError) {
+    throw new Error(
+      rpcError.message?.includes("not found")
+        ? "Article introuvable."
+        : "Impossible de créer le mouvement."
+    );
+  }
+
+  // Fetch the movement that was just created for the return value
+  const { data: movement, error: fetchError } = await supabase
+    .from("stock_movements")
+    .select("*")
+    .eq("stock_item_id", data.stock_item_id)
+    .eq("type", data.type)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (fetchError || !movement) {
+    throw new Error("Mouvement créé mais impossible de le récupérer.");
+  }
+
+  return movement;
+
+  /* --- FALLBACK: ancien code non atomique (si la migration n'est pas encore appliquée) ---
   const { data: item } = await supabase
     .from("stock_items")
     .select("id, current_quantity")
     .eq("id", data.stock_item_id)
     .eq("restaurant_id", restaurantId)
     .single();
-
   if (!item) throw new Error("Article introuvable.");
 
-  // Create movement
-  const { data: { user } } = await supabase.auth.getUser();
-  const { data: movement, error: movError } = await supabase
+  const { data: movementFb, error: movError } = await supabase
     .from("stock_movements")
     .insert({
-      stock_item_id: data.stock_item_id,
-      type: data.type,
-      quantity: data.quantity,
-      reference_type: "manual",
-      notes: data.notes || null,
-      created_by: user!.id,
+      stock_item_id: data.stock_item_id, type: data.type, quantity: data.quantity,
+      reference_type: "manual", notes: data.notes || null, created_by: user!.id,
     })
-    .select()
-    .single();
-
+    .select().single();
   if (movError) throw new Error("Impossible de créer le mouvement.");
 
-  // Update current_quantity
   const newQty = Number(item.current_quantity) + data.quantity;
-  await supabase
-    .from("stock_items")
+  await supabase.from("stock_items")
     .update({ current_quantity: newQty, updated_at: new Date().toISOString() })
     .eq("id", data.stock_item_id);
-
-  return movement;
+  return movementFb;
+  --- FIN FALLBACK --- */
 }
 
 export async function processInventory(
@@ -513,6 +582,9 @@ export async function createPurchaseOrder(
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
+  z.string().uuid().parse(supplierId);
+  z.array(purchaseOrderItemSchema).min(1).parse(items);
+
   const totalHt = items.reduce((sum, i) => sum + i.quantity * i.unit_price, 0);
 
   const { data: order, error } = await supabase
@@ -598,7 +670,7 @@ export async function receivePurchaseOrder(
 
   if (!poCheck) throw new Error("Bon de commande introuvable.");
 
-  // Update each PO item and create stock movements
+  // Update each PO item and adjust stock atomically via RPC
   for (const received of receivedItems) {
     const { data: poItem } = await supabase
       .from("purchase_order_items")
@@ -609,41 +681,40 @@ export async function receivePurchaseOrder(
 
     if (!poItem) continue;
 
-    // Update received quantity
+    // Update received quantity on PO item
     await supabase
       .from("purchase_order_items")
       .update({ quantity_received: received.quantity_received })
       .eq("id", received.item_id);
 
-    // Create stock movement
+    // Atomic stock adjustment + movement via RPC
     if (received.quantity_received > 0) {
-      await supabase.from("stock_movements").insert({
-        stock_item_id: poItem.stock_item_id,
-        type: "purchase",
-        quantity: received.quantity_received,
-        unit_cost: Number(poItem.unit_price),
-        reference_type: "purchase_order",
-        reference_id: id,
-        created_by: user!.id,
-      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: rpcError } = await (supabase.rpc as any)(
+        "adjust_stock_quantity",
+        {
+          p_stock_item_id: poItem.stock_item_id,
+          p_restaurant_id: restaurantId,
+          p_delta: received.quantity_received,
+          p_movement_type: "purchase",
+          p_reference_type: "purchase_order",
+          p_reference_id: id,
+          p_notes: null,
+          p_user_id: user!.id,
+          p_unit_cost: Number(poItem.unit_price),
+        }
+      );
 
-      // Update stock item quantity and cost
-      const { data: stockItem } = await supabase
-        .from("stock_items")
-        .select("current_quantity")
-        .eq("id", poItem.stock_item_id)
-        .single();
-
-      if (stockItem) {
-        await supabase
-          .from("stock_items")
-          .update({
-            current_quantity: Number(stockItem.current_quantity) + received.quantity_received,
-            unit_cost: Number(poItem.unit_price),
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", poItem.stock_item_id);
+      if (rpcError) {
+        console.error(`RPC adjust_stock_quantity failed for item ${poItem.stock_item_id}:`, rpcError);
+        // Non-blocking: continue processing remaining items
       }
+
+      // Also update unit_cost on the stock item (not handled by RPC)
+      await supabase
+        .from("stock_items")
+        .update({ unit_cost: Number(poItem.unit_price) })
+        .eq("id", poItem.stock_item_id);
     }
   }
 

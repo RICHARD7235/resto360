@@ -1,5 +1,6 @@
 "use server";
 
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireActionPermission } from "@/lib/rbac";
@@ -37,6 +38,46 @@ async function getCurrentUserId(): Promise<string> {
   if (!user) throw new Error("Non authentifié");
   return user.id;
 }
+
+// ---------------------------------------------------------------------------
+// Zod Schemas
+// ---------------------------------------------------------------------------
+
+const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+
+const closingSchema = z.object({
+  closing_date: z.string().regex(dateRegex),
+  total_ttc: z.number().min(0),
+  total_cb: z.number().min(0),
+  total_cash: z.number().min(0),
+  total_tickets: z.number().min(0).optional(),
+  total_other: z.number().min(0).optional(),
+  total_check: z.number().min(0).optional(),
+  total_ticket_resto: z.number().min(0).optional(),
+  vat_5_5: z.number().min(0).optional(),
+  vat_10: z.number().min(0).optional(),
+  vat_20: z.number().min(0).optional(),
+  notes: z.string().max(1000).optional().nullable(),
+});
+
+const closingArraySchema = z.array(closingSchema).max(500);
+
+const treasuryEntrySchema = z.object({
+  entry_date: z.string().regex(dateRegex),
+  type: z.enum(["income", "expense"]),
+  category: z.string().min(1).max(100),
+  label: z.string().min(1).max(200).optional(),
+  amount: z.number().refine((v) => v !== 0, { message: "Le montant ne peut pas etre zero" }),
+  description: z.string().max(500).optional().nullable(),
+  payment_method: z.string().max(50).optional().nullable(),
+  source_module: z.string().optional().nullable(),
+  source_id: z.string().optional().nullable(),
+});
+
+const vatPeriodSchema = z.object({
+  period_start: z.string().regex(dateRegex),
+  period_end: z.string().regex(dateRegex),
+});
 
 // ---------------------------------------------------------------------------
 // Closings (Z de caisse)
@@ -81,6 +122,7 @@ export async function getClosingByDate(date: string): Promise<CashRegisterClosin
 export async function createClosing(
   input: Omit<CashRegisterClosingInsert, "restaurant_id" | "created_by">
 ): Promise<CashRegisterClosing> {
+  closingSchema.parse(input);
   const { restaurantId } = await requireActionPermission("m08_caisse", "write");
   const userId = await getCurrentUserId();
   const supabase = await createUntypedClient();
@@ -116,6 +158,7 @@ export async function createClosing(
 export async function importClosings(
   rows: Omit<CashRegisterClosingInsert, "restaurant_id" | "created_by">[]
 ): Promise<{ inserted: number; skipped: number }> {
+  closingArraySchema.parse(rows);
   const { restaurantId } = await requireActionPermission("m08_caisse", "write");
   const userId = await getCurrentUserId();
   const supabase = await createUntypedClient();
@@ -433,6 +476,7 @@ export async function createVatPeriod(
   periodStart: string,
   periodEnd: string
 ): Promise<VatPeriod> {
+  vatPeriodSchema.parse({ period_start: periodStart, period_end: periodEnd });
   const { restaurantId } = await requireActionPermission("m08_caisse", "write");
   const supabase = await createUntypedClient();
 
@@ -593,6 +637,7 @@ export async function getTreasurySummary(filters?: {
 export async function createTreasuryEntry(
   input: Omit<TreasuryEntryInsert, "restaurant_id">
 ): Promise<TreasuryEntry> {
+  treasuryEntrySchema.parse(input);
   const { restaurantId } = await requireActionPermission("m08_caisse", "write");
   const supabase = await createUntypedClient();
 
