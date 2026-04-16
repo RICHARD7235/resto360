@@ -32,6 +32,16 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
+
+  // Supabase redirige par défaut les liens email (recovery, magic link, signup)
+  // vers `{SITE_URL}/?code=XXX`. On forwarde vers /auth/callback qui fait
+  // l'échange PKCE — AVANT le guard d'auth car l'user n'a pas encore de session.
+  if (pathname === "/" && request.nextUrl.searchParams.has("code")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/auth/callback";
+    return NextResponse.redirect(url);
+  }
+
   const isPublicRoute = publicRoutes.some((route) =>
     pathname.startsWith(route)
   );
